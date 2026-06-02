@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+
+    <!-- SEO & Open Graph -->
+    <title>Frictionless Operations | Enterprise Freight Audit & Recovery</title>
+    <meta name="description" content="Frictionless Operations executes high-density, non-invasive freight audits on a pure contingency basis. Recover capital lost to complex carrier billing variances at zero upfront cost.">
+    <meta property="og:title" content="Frictionless Operations | Enterprise Freight Audit & Recovery">
+    <meta property="og:description" content="Most enterprise freight bills contain systematic billing errors your AP software is not designed to catch. Our forensic audit recovers those overcharges at zero upfront cost.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://frictionlessoperations.com">
+    <!-- REPLACE: Add a real branded OG image at /og-image.png before launch -->
+    <meta property="og:image" content="https://frictionlessoperations.com/og-image.png">
+
+    <!-- SVG monogram favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text x='50' y='68' font-family='Georgia,serif' font-size='44' font-weight='700' fill='%23d4af37' text-anchor='middle'>FO</text></svg>">
+
+    <!-- Organization Schema Markup (SEO) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ProfessionalService",
+      "name": "Frictionless Operations LLC",
+      "description": "Enterprise freight audit and capital recovery advisory firm operating on a pure contingency basis.",
+      "url": "https://frictionlessoperations.com",
+      "email": "bradley@frictionlessoperations.com",
+      "serviceType": ["Freight Audit", "Transportation Payment Audit", "Carrier Contract Analysis", "Capital Recovery"],
+      "areaServed": "US"
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['DM Sans', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                    },
+                    colors: {
+                        brand: {
+                            navy: '#0f172a',
+                            gold:  '#d4af37',
+                            light: '#f8fafc',
+                            gray:  '#475569',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f8fafc;
+            color: #334155;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ══ Keyboard focus ring ════════════════════════════
+            Gold outline on keyboard nav — zero visual noise for mouse users. */
+        *:focus-visible {
+            outline: 2px solid #d4af37;
+            outline-offset: 3px;
+            border-radius: 2px;
+        }
+        *:focus:not(:focus-visible) { outline: none; }
+
+        /* ══ Hero ══════════════════════════════════════════ */
+        .hero-section {
+            background-color: #0f172a;
+            background-image:
+                radial-gradient(circle at 75% 20%, rgba(212,175,55,0.09) 0%, transparent 45%),
+                radial-gradient(circle at 15% 85%, rgba(212,175,55,0.04) 0%, transparent 40%);
+        }
+        .hero-grid {
+            background-image:
+                linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+            background-size: 64px 64px;
+        }
+        .hero-grain { position: relative; }
+        .hero-grain::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+            opacity: 0.45;
+            pointer-events: none;
+            mix-blend-mode: overlay;
+            z-index: 0;
+        }
+        .hero-grain > * { position: relative; z-index: 1; }
+
+        /* ══ Scroll-Aware Navigation ═══════════════════════ */
+        #main-nav {
+            background-color: transparent;
+            border-bottom-color: transparent;
+            transition:
+                background-color 0.4s ease,
+                border-bottom-color 0.4s ease,
+                backdrop-filter 0.4s ease;
+        }
+        #main-nav.scrolled {
+            background-color: rgba(255,255,255,0.97);
+            border-bottom-color: #e2e8f0;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .nav-logo       { color: #ffffff;               transition: color 0.3s ease; }
+        .nav-logo-sub   { color: rgba(255,255,255,0.4); transition: color 0.3s ease; }
+        #main-nav.scrolled .nav-logo     { color: #0f172a; }
+        #main-nav.scrolled .nav-logo-sub { color: #94a3b8; }
+        .nav-link { color: rgba(255,255,255,0.72); transition: color 0.3s ease; }
+        .nav-link:hover { color: #d4af37; }
+        #main-nav.scrolled .nav-link       { color: #475569; }
+        #main-nav.scrolled .nav-link:hover { color: #0f172a; }
+        .nav-email { color: rgba(255,255,255,0.38); transition: color 0.3s ease; font-size: 0.75rem; }
+        .nav-email:hover { color: rgba(255,255,255,0.65); }
+        #main-nav.scrolled .nav-email       { color: #94a3b8; }
+        #main-nav.scrolled .nav-email:hover { color: #0f172a; }
+        .nav-cta {
+            border: 1px solid rgba(212,175,55,0.5);
+            color: #d4af37;
+            padding: 0.6rem 1.25rem;
+            border-radius: 2px;
+            font-size: 0.875rem;
+            transition:
+                background-color 0.3s ease,
+                border-color 0.3s ease,
+                color 0.3s ease,
+                box-shadow 0.3s ease;
+        }
+        .nav-cta:hover { background-color: #d4af37; color: #0f172a; }
+        #main-nav.scrolled .nav-cta       { background-color: #0f172a; border-color: #0f172a; color: #ffffff; }
+        #main-nav.scrolled .nav-cta:hover { background-color: #1e293b; box-shadow: 0 4px 12px rgba(15,23,42,0.18); }
+        #nav-hamburger { color: rgba(255,255,255,0.85); transition: color 0.3s ease; }
+        #main-nav.scrolled #nav-hamburger { color: #0f172a; }
+
+        /* ══ Buttons ════════════════════════════════════════ */
+        .btn-primary {
+            background-color: #0f172a; color: #ffffff;
+            border: 1px solid #0f172a;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #1e293b;
+            box-shadow: 0 4px 12px rgba(15,23,42,0.18);
+        }
+        .btn-gold {
+            background-color: #d4af37; color: #0f172a;
+            font-weight: 600;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .btn-gold:hover {
+            background-color: #bfa032;
+            box-shadow: 0 4px 16px rgba(212,175,55,0.3);
+        }
+
+        /* ══ Inputs ════════════════════════════════════════ */
+        input, select, textarea {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #0f172a;
+            box-shadow: 0 0 0 1px #0f172a;
+        }
+
+        /* ══ Custom select arrow ════════════════════════════ */
+        .select-wrapper { position: relative; }
+        .select-wrapper::after {
+            content: '';
+            position: absolute;
+            right: 16px; top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            width: 0; height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #475569;
+        }
+
+        /* ══ Mobile menu ════════════════════════════════════ */
+        #mobile-menu {
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        #mobile-menu.open { transform: translateX(0); }
+        #mobile-backdrop {
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #mobile-backdrop.open { opacity: 1; pointer-events: auto; }
+
+        /* ══ Card hover ═════════════════════════════════════ */
+        .card-hover {
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(15,23,42,0.10);
+            border-color: rgba(212,175,55,0.3);
+        }
+
+        /* ══ Process connector line (desktop only) ══════════ */
+        @media (min-width: 768px) {
+            .process-grid::before {
+                content: '';
+                position: absolute;
+                top: 25px;
+                left: 12.5%; right: 12.5%;
+                height: 1px;
+                background: linear-gradient(90deg, #0f172a 0%, #d4af37 50%, #0f172a 100%);
+                opacity: 0.35;
+                z-index: 0;
+            }
+        }
+        .process-grid { position: relative; }
+        .process-step { position: relative; z-index: 1; }
+        .process-step-inner { transition: transform 0.2s ease; }
+        .process-step:hover .process-step-inner { transform: translateY(-3px); }
+
+        /* ══ Entrance Animations ════════════════════════════ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(22px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .hero-badge    { animation: fadeUp 0.55s ease 0.10s both; }
+        .hero-h1       { animation: fadeUp 0.60s ease 0.25s both; }
+        .hero-sub      { animation: fadeUp 0.60s ease 0.42s both; }
+        .hero-stats    { animation: fadeUp 0.60s ease 0.57s both; }
+        .hero-actions  { animation: fadeUp 0.60s ease 0.72s both; }
+        .hero-deco-card { animation: fadeUp 0.80s ease 0.90s both; }
+
+        /* Scroll-triggered reveals */
+        .reveal {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity 0.55s ease, transform 0.55s ease;
+        }
+        .reveal.visible        { opacity: 1; transform: translateY(0); }
+        .reveal.reveal-d1      { transition-delay: 0.10s; }
+        .reveal.reveal-d2      { transition-delay: 0.20s; }
+        .reveal.reveal-d3      { transition-delay: 0.30s; }
+        .reveal.reveal-d4      { transition-delay: 0.42s; }
+
+        /* Stat values — tabular-nums prevents layout shift during count-up */
+        .stat-value { font-variant-numeric: tabular-nums; }
+
+        /* ══ Submit button spinner ══════════════════════════ */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .btn-spinner {
+            display: inline-block;
+            width: 13px; height: 13px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           NEW ADDITIONS
+        ═══════════════════════════════════════════════════ */
+
+        /* ── Section eyebrow label ──────────────────────────
+           Consistent label style used across all sections. */
+        .section-eyebrow {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #d4af37;
+            display: block;
+        }
+
+        /* ── Gold accent bar ─────────────────────────────── */
+        .gold-bar {
+            display: block;
+            width: 2.5rem;
+            height: 2px;
+            background: #d4af37;
+        }
+
+        /* ── Methodology icons ───────────────────────────── */
+        .method-icon {
+            width: 38px; height: 38px;
+            color: #d4af37;
+            margin-bottom: 1.25rem;
+            display: block;
+        }
+
+        /* ── Hero report card ────────────────────────────── */
+        .hero-deco-card { will-change: opacity, transform; }
+
+        @keyframes growBar {
+            from { transform: scaleX(0); }
+            to   { transform: scaleX(1); }
+        }
+        .report-bar-fill {
+            transform-origin: left;
+            transform: scaleX(0);
+            animation: growBar 1.4s cubic-bezier(0.16, 1, 0.3, 1) 1.6s both;
+        }
+
+        /* ── Dark statement interstitial ─────────────────── */
+        .interstitial {
+            background-color: #080f1d;
+            background-image:
+                radial-gradient(circle at 80% 50%, rgba(212,175,55,0.06) 0%, transparent 55%);
+            border-top: 1px solid rgba(212,175,55,0.12);
+            border-bottom: 1px solid rgba(212,175,55,0.12);
+        }
+
+        /* ── Trust strip ─────────────────────────────────── */
+        .trust-strip {
+            background: #0f172a;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* ── Contact two-column layout ───────────────────── */
+        .contact-wrapper {
+            overflow: hidden;
+            border-radius: 2px;
+            box-shadow: 0 8px 40px rgba(15,23,42,0.12);
+        }
+        @media (min-width: 1024px) {
+            .contact-grid {
+                display: grid;
+                grid-template-columns: 320px 1fr;
+            }
+        }
+        .contact-sidebar {
+            background: #0f172a;
+            padding: 3rem 2.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 2rem;
+        }
+        .contact-form-panel {
+            background: #ffffff;
+            padding: 3rem 2.5rem;
+            border-left: 1px solid rgba(255,255,255,0.08);
+        }
+        @media (max-width: 1023px) {
+            .contact-sidebar   { padding: 2rem 1.5rem; }
+            .contact-form-panel { padding: 2rem 1.5rem; border-left: none; border-top: 1px solid #e2e8f0; }
+        }
+
+        /* ── Sticky CTA ──────────────────────────────────── */
+        #sticky-cta {
+            opacity: 0;
+            transform: translateY(10px) scale(0.96);
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            will-change: opacity, transform;
+        }
+        #sticky-cta.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col min-h-screen relative selection:bg-brand-navy selection:text-white">
+
+<!-- ═══════════════════════════════════════════════════════
+     MOBILE NAVIGATION DRAWER
+═══════════════════════════════════════════════════════ -->
+<div id="mobile-backdrop" class="fixed inset-0 z-40 bg-brand-navy/75 backdrop-blur-sm md:hidden"></div>
+
+<div id="mobile-menu"
+     role="dialog" aria-modal="true" aria-label="Navigation menu"
+     class="fixed top-0 right-0 z-50 h-full w-72 bg-brand-navy shadow-2xl flex flex-col md:hidden">
+    <div class="flex justify-between items-center px-6 py-5 border-b border-white/10">
+        <span class="font-serif font-bold text-white text-lg tracking-wide uppercase">
+            Frictionless <span class="font-light text-slate-400">Ops</span>
+        </span>
+        <button id="mobile-close-btn" type="button" aria-label="Close menu"
+                class="text-slate-400 hover:text-white transition-colors p-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+    <nav class="flex-grow flex flex-col p-6 space-y-1" aria-label="Mobile navigation">
+        <a href="#methodology" class="py-3 px-4 text-slate-300 hover:text-brand-gold hover:bg-white/5 rounded-sm transition-colors text-sm font-medium uppercase tracking-wider">Methodology</a>
+        <a href="#process"     class="py-3 px-4 text-slate-300 hover:text-brand-gold hover:bg-white/5 rounded-sm transition-colors text-sm font-medium uppercase tracking-wider">Our Process</a>
+        <a href="#contact"     class="py-3 px-4 text-slate-300 hover:text-brand-gold hover:bg-white/5 rounded-sm transition-colors text-sm font-medium uppercase tracking-wider">Contact</a>
+        <div class="pt-4 mt-4 border-t border-white/10">
+            <a href="mailto:bradley@frictionlessoperations.com"
+               class="block text-xs text-slate-500 hover:text-slate-400 transition-colors px-4 py-2 truncate">
+                bradley@frictionlessoperations.com
+            </a>
+        </div>
+    </nav>
+    <div class="p-6 border-t border-white/10">
+        <a href="#contact"
+           class="btn-gold block w-full py-3.5 uppercase tracking-widest text-sm text-center rounded-sm">
+            Request Audit
+        </a>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FIXED NAVIGATION
+═══════════════════════════════════════════════════════ -->
+<nav id="main-nav" class="fixed w-full z-50 border-b">
+    <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+        <a href="#" class="nav-logo font-serif font-bold text-xl tracking-wide uppercase">
+            Frictionless <span class="nav-logo-sub">Operations</span>
+        </a>
+
+        <!-- Desktop links — added Contact anchor -->
+        <div class="hidden md:flex items-center space-x-8 text-sm font-medium">
+            <a href="#methodology" class="nav-link">Methodology</a>
+            <a href="#process"     class="nav-link">Our Process</a>
+            <a href="#contact"     class="nav-link">Contact</a>
+            <a href="mailto:bradley@frictionlessoperations.com" class="nav-email">
+                bradley@frictionlessoperations.com
+            </a>
+            <a href="#contact" class="nav-cta">Request Audit</a>
+        </div>
+
+        <!-- Mobile hamburger -->
+        <button id="nav-hamburger" type="button"
+                aria-label="Open navigation" aria-expanded="false" aria-controls="mobile-menu"
+                class="md:hidden p-2 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+    </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+     CHANGE: "Absolute Recovery" → text-brand-gold (more punch)
+     CHANGE: Two-column flex layout for report card (lg+)
+     ADDITION: Right-side audit report sample card
+═══════════════════════════════════════════════════════ -->
+<header id="hero" class="hero-section hero-grid hero-grain text-white pt-32 pb-24 lg:pt-40 lg:pb-32 overflow-hidden">
+    <div class="container mx-auto px-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-12 xl:gap-16">
+
+            <!-- Left: text content -->
+            <div class="flex-1 lg:max-w-[600px]">
+
+                <div class="hero-badge inline-flex items-center border border-brand-gold/30 rounded-full px-4 py-1.5 mb-8 text-sm font-medium text-brand-gold">
+                    Transportation Payment & Audit Advisory
+                </div>
+
+                <h1 class="hero-h1 font-serif text-5xl md:text-6xl lg:text-7xl mb-6 leading-[1.05]">
+                    Algorithmic<br>Auditing.
+                    <span class="block text-brand-gold italic font-normal mt-1">Absolute Recovery.</span>
+                </h1>
+
+                <p class="hero-sub text-lg md:text-xl mb-12 max-w-xl leading-relaxed text-slate-300 font-light">
+                    Most enterprise freight bills contain systematic billing errors your AP software
+                    is not designed to catch. Our forensic audit recovers those overcharges —
+                    at zero upfront cost and zero disruption to your operations.
+                </p>
+
+                <div class="hero-stats grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-6 border-y border-white/10 py-6 mb-12">
+                    <div>
+                        <span class="stat-value text-brand-gold font-bold text-xl block"
+                              data-target="0" data-prefix="$">$0</span>
+                        <span class="text-xs uppercase tracking-wider text-slate-400 mt-1 block">Upfront Cost</span>
+                    </div>
+                    <div class="sm:border-l sm:border-white/10 sm:pl-6">
+                        <span class="stat-value text-brand-gold font-bold text-xl block"
+                              data-target="30" data-suffix="%">30%</span>
+                        <span class="text-xs uppercase tracking-wider text-slate-400 mt-1 block">Contingency Fee</span>
+                    </div>
+                    <div class="sm:border-l sm:border-white/10 sm:pl-6">
+                        <span class="text-brand-gold font-bold text-xl block">1–3 Years</span>
+                        <span class="text-xs uppercase tracking-wider text-slate-400 mt-1 block">Historical Lookback</span>
+                    </div>
+                    <div class="sm:border-l sm:border-white/10 sm:pl-6">
+                        <span class="stat-value text-brand-gold font-bold text-xl block"
+                              data-target="5" data-prefix="$" data-suffix="M+">$5M+</span>
+                        <span class="text-xs uppercase tracking-wider text-slate-400 mt-1 block">Min. Qualifying Spend</span>
+                    </div>
+                </div>
+
+                <div class="hero-actions flex flex-col sm:flex-row gap-4">
+                    <a href="#contact"
+                       class="btn-gold px-8 py-4 uppercase tracking-widest text-sm text-center rounded-sm">
+                        Request Confidential Audit Review
+                    </a>
+                    <a href="#process"
+                       class="px-8 py-4 border border-white/20 hover:border-white/50 text-white uppercase
+                              tracking-widest text-sm text-center rounded-sm transition-colors">
+                        Our Process
+                    </a>
+                </div>
+            </div>
+
+            <!-- Right: Sample Audit Report Card — visible lg+ only.
+                 Illustrates exactly what the service produces.
+                 pointer-events: none keeps it non-interactive. -->
+            <div class="hidden lg:flex flex-1 justify-center lg:justify-end items-center"
+                 aria-hidden="true" style="pointer-events: none;">
+                <div class="hero-deco-card w-full max-w-[360px] border border-white/10 rounded-sm
+                            bg-white/[0.03] backdrop-blur-sm overflow-hidden text-xs">
+                    <!-- Card header -->
+                    <div class="flex justify-between items-center px-5 py-4 border-b border-white/8 bg-white/[0.03]">
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-0.5">Audit Extract</div>
+                            <div class="text-xs text-slate-300 font-medium tracking-wide">National LTL Freight Co.</div>
+                        </div>
+                        <span class="text-[9px] uppercase tracking-widest bg-brand-gold/15 text-brand-gold
+                                     px-2.5 py-1 rounded-full border border-brand-gold/25">
+                            Sample
+                        </span>
+                    </div>
+
+                    <!-- Invoice reference -->
+                    <div class="px-5 pt-4 pb-3">
+                        <div class="text-[10px] text-slate-600 uppercase tracking-widest font-mono">
+                            Invoice #NLF-24-8840-Q3
+                        </div>
+                    </div>
+
+                    <!-- Line items -->
+                    <div class="px-5 pb-4 space-y-2.5">
+                        <!-- Column headers -->
+                        <div class="grid grid-cols-[1fr_auto_auto] gap-x-5 pb-2 border-b border-white/6">
+                            <span class="text-[9px] text-slate-600 uppercase tracking-widest">Line Item</span>
+                            <span class="text-[9px] text-slate-600 uppercase tracking-widest text-right">Billed</span>
+                            <span class="text-[9px] text-slate-600 uppercase tracking-widest text-right">Variance</span>
+                        </div>
+                        <!-- Fuel Surcharge -->
+                        <div class="grid grid-cols-[1fr_auto_auto] gap-x-5 items-start">
+                            <div>
+                                <div class="text-slate-300">Fuel Surcharge</div>
+                                <div class="text-[9px] text-slate-600 mt-0.5">Schedule 2024-Q3</div>
+                            </div>
+                            <span class="text-slate-400 font-mono tabular-nums text-right">$4,280</span>
+                            <span class="text-brand-gold font-mono font-semibold tabular-nums text-right">+$570</span>
+                        </div>
+                        <!-- Terminal Handling (duplicate) -->
+                        <div class="grid grid-cols-[1fr_auto_auto] gap-x-5 items-start">
+                            <div>
+                                <div class="text-slate-300">Terminal Handling</div>
+                                <div class="text-[9px] text-red-400/80 mt-0.5">✕ Duplicate charge</div>
+                            </div>
+                            <span class="text-slate-400 font-mono tabular-nums text-right">$890</span>
+                            <span class="text-brand-gold font-mono font-semibold tabular-nums text-right">+$890</span>
+                        </div>
+                        <!-- Dimensional Weight -->
+                        <div class="grid grid-cols-[1fr_auto_auto] gap-x-5 items-start">
+                            <div>
+                                <div class="text-slate-300">Dim Weight Override</div>
+                                <div class="text-[9px] text-slate-600 mt-0.5">Contract rate mismatch</div>
+                            </div>
+                            <span class="text-slate-400 font-mono tabular-nums text-right">$2,190</span>
+                            <span class="text-brand-gold font-mono font-semibold tabular-nums text-right">+$350</span>
+                        </div>
+                        <!-- Base freight — clean (dimmed) -->
+                        <div class="grid grid-cols-[1fr_auto_auto] gap-x-5 items-center opacity-25">
+                            <span class="text-slate-400 line-through">Base Freight</span>
+                            <span class="text-slate-500 font-mono tabular-nums line-through text-right">$18,450</span>
+                            <span class="text-slate-600 text-right">—</span>
+                        </div>
+                    </div>
+
+                    <!-- Recovery total + bar -->
+                    <div class="mx-5 mb-5 pt-4 border-t border-brand-gold/20">
+                        <div class="flex justify-between items-baseline mb-3">
+                            <div>
+                                <div class="text-[9px] text-slate-500 uppercase tracking-widest">Invoice Recovery</div>
+                                <div class="text-[9px] text-slate-600 mt-0.5">3 variances isolated</div>
+                            </div>
+                            <span class="text-brand-gold font-bold text-lg tabular-nums font-sans">$1,810</span>
+                        </div>
+                        <!-- Animated progress bar (CSS animation, fires once on load) -->
+                        <div class="h-[3px] rounded-full bg-white/5 overflow-hidden">
+                            <div class="report-bar-fill h-full rounded-full
+                                        bg-gradient-to-r from-brand-gold/60 to-brand-gold"
+                                 style="width: 78%"></div>
+                        </div>
+                        <div class="flex justify-between mt-1.5">
+                            <span class="text-[9px] text-slate-600">Contracted basis</span>
+                            <span class="text-[9px] text-brand-gold/60">78% overcharge rate</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     METHODOLOGY — Structural Inefficiencies
+     ADDITION: SVG icons on each card for visual differentiation
+═══════════════════════════════════════════════════════ -->
+<section id="methodology" class="py-24 bg-brand-light">
+    <div class="container mx-auto px-6">
+        <div class="flex flex-col md:flex-row md:justify-between md:items-end border-b border-slate-200 pb-8 mb-16">
+            <div class="max-w-2xl reveal">
+                <span class="section-eyebrow mb-4">Structural Inefficiencies</span>
+                <h2 class="font-serif text-3xl md:text-4xl text-brand-navy leading-tight">
+                    Carrier contracts are complex by design,<br class="hidden md:block">
+                    leading to systemic capital leakage.
+                </h2>
+            </div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-8">
+
+            <!-- Card 1: Contractual Drift -->
+            <div class="card-hover reveal reveal-d1 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
+                <!-- Icon: document with diverging arrows (contract vs. applied rate) -->
+                <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
+                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="5" y="4" width="19" height="24" rx="1.5"/>
+                    <line x1="9" y1="10" x2="20" y2="10"/>
+                    <line x1="9" y1="14" x2="20" y2="14"/>
+                    <line x1="9" y1="18" x2="16" y2="18"/>
+                    <path d="M24 16 L32 10"/>
+                    <path d="M24 16 L32 22"/>
+                    <path d="M29 10 L32 10 L32 22 L29 22"/>
+                </svg>
+                <div class="text-brand-gold font-serif text-3xl mb-3 leading-none select-none">01.</div>
+                <h3 class="text-xl mb-4 text-brand-navy font-semibold">Contractual Drift</h3>
+                <p class="text-brand-gray leading-relaxed text-sm">
+                    Negotiated base rates act merely as a theoretical baseline. Complex carrier matrices
+                    frequently diverge from executed contracts, applying uncontracted lanes, expired tariffs,
+                    or failing to honor established volume tiers.
+                </p>
+            </div>
+
+            <!-- Card 2: Accessorial Hemorrhage -->
+            <div class="card-hover reveal reveal-d2 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
+                <!-- Icon: funnel with leakage drip -->
+                <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
+                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 8 L32 8 L23 19 L23 28 L15 28 L15 19 Z"/>
+                    <circle cx="19" cy="33" r="1.5" fill="currentColor" stroke="none"/>
+                    <circle cx="16" cy="37" r="1" fill="currentColor" stroke="none" opacity="0.45"/>
+                    <circle cx="22" cy="36.5" r="0.8" fill="currentColor" stroke="none" opacity="0.3"/>
+                </svg>
+                <div class="text-brand-gold font-serif text-3xl mb-3 leading-none select-none">02.</div>
+                <h3 class="text-xl mb-4 text-brand-navy font-semibold">Accessorial Hemorrhage</h3>
+                <p class="text-brand-gray leading-relaxed text-sm">
+                    The accessorial schedule represents the primary extraction vector. Carriers deploy
+                    obfuscated fuel schedule mismatches and duplicate terminal handling charges that
+                    routinely bypass standard AP approval tolerances.
+                </p>
+            </div>
+
+            <!-- Card 3: The AP Dilemma -->
+            <div class="card-hover reveal reveal-d3 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
+                <!-- Icon: tipped balance scales -->
+                <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
+                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="19" y1="6" x2="19" y2="30"/>
+                    <line x1="12" y1="30" x2="26" y2="30"/>
+                    <!-- Left pan (heavier — lower) -->
+                    <line x1="19" y1="10" x2="7" y2="17"/>
+                    <path d="M4 17 C4 20.5 6 22.5 7 22.5 S10 20.5 10 17 Z"/>
+                    <!-- Right pan (lighter — higher) -->
+                    <line x1="19" y1="10" x2="31" y2="13"/>
+                    <path d="M28 13 C28 16.5 30 18.5 31 18.5 S34 16.5 34 13 Z"/>
+                </svg>
+                <div class="text-brand-gold font-serif text-3xl mb-3 leading-none select-none">03.</div>
+                <h3 class="text-xl mb-4 text-brand-navy font-semibold">The AP Dilemma</h3>
+                <p class="text-brand-gray leading-relaxed text-sm">
+                    Standard internal workflows prioritize operational speed over forensic accuracy.
+                    Without bandwidth for line-item historical reconciliation against multi-tiered tariffs,
+                    finance effectively automates capital hemorrhage.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     DARK STATEMENT INTERSTITIAL  [NEW SECTION]
+     A full-width editorial break: pull-quote on dark navy
+     reinforces the core problem and primes the CTA.
+═══════════════════════════════════════════════════════ -->
+<section class="interstitial py-20 lg:py-28">
+    <div class="container mx-auto px-6">
+        <div class="max-w-5xl mx-auto">
+            <div class="grid lg:grid-cols-[180px_1fr] gap-12 lg:gap-20 items-start reveal">
+
+                <!-- Left: gold accent + label + summary bullets -->
+                <div class="pt-1">
+                    <span class="gold-bar mb-5"></span>
+                    <span class="section-eyebrow">The Core Problem</span>
+                    <div class="mt-8 hidden lg:block space-y-3">
+                        <div class="flex items-center gap-2.5 text-xs text-slate-500">
+                            <span class="w-1.5 h-1.5 rounded-full bg-brand-gold/60 flex-shrink-0"></span>
+                            Tariff obfuscation
+                        </div>
+                        <div class="flex items-center gap-2.5 text-xs text-slate-500">
+                            <span class="w-1.5 h-1.5 rounded-full bg-brand-gold/60 flex-shrink-0"></span>
+                            Accessorial proliferation
+                        </div>
+                        <div class="flex items-center gap-2.5 text-xs text-slate-500">
+                            <span class="w-1.5 h-1.5 rounded-full bg-brand-gold/60 flex-shrink-0"></span>
+                            Invoice volume pressure
+                        </div>
+                        <div class="flex items-center gap-2.5 text-xs text-slate-500">
+                            <span class="w-1.5 h-1.5 rounded-full bg-brand-gold/60 flex-shrink-0"></span>
+                            Finite lookback window
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: editorial pull-quote + supporting prose + CTA -->
+                <div>
+                    <blockquote class="font-serif text-2xl md:text-3xl lg:text-[2.1rem] text-white leading-[1.25] mb-8">
+                        "The variance is already in your data.
+                        <span class="text-slate-400 italic"> The only question
+                        is whether you recover it."</span>
+                    </blockquote>
+                    <p class="text-slate-400 text-base leading-relaxed max-w-2xl mb-8">
+                        Standard AP workflows are engineered for throughput, not forensic depth. The structural
+                        complexity of carrier billing — stacked tariff schedules, rolling accessorial tables,
+                        multi-origin rate matrices — is designed to exceed standard approval tolerances, leaving
+                        systematic overcharges invisible until a purpose-built audit isolates them.
+                    </p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <a href="#contact"
+                           class="btn-gold px-6 py-3 uppercase tracking-widest text-xs rounded-sm inline-block">
+                            Request Audit Review
+                        </a>
+                        <span class="text-slate-600 text-xs">Zero upfront cost &nbsp;·&nbsp; Pure contingency model</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     OUR PROCESS
+     ADDITION: .process-step-inner for hover lift animation
+═══════════════════════════════════════════════════════ -->
+<section id="process" class="py-24 bg-white border-t border-slate-100">
+    <div class="container mx-auto px-6">
+        <div class="text-center max-w-2xl mx-auto mb-20 reveal">
+            <span class="section-eyebrow mb-4">Engagement Workflow</span>
+            <h2 class="font-serif text-3xl md:text-4xl text-brand-navy">
+                A non-invasive, four-stage forensic process.
+            </h2>
+        </div>
+
+        <div class="process-grid grid md:grid-cols-4 gap-8 max-w-5xl mx-auto">
+
+            <div class="process-step reveal reveal-d1 text-center">
+                <div class="process-step-inner">
+                    <div class="w-[52px] h-[52px] rounded-full border-2 border-brand-navy bg-brand-navy text-brand-gold
+                                font-serif text-xl font-bold flex items-center justify-center mx-auto mb-6">1</div>
+                    <h3 class="text-brand-navy font-semibold mb-3 text-base">Execute Agreements</h3>
+                    <p class="text-brand-gray text-sm leading-relaxed">
+                        We begin with a Mutual NDA and Letter of Authorization. Your carrier data is fully
+                        protected before any information changes hands.
+                    </p>
+                </div>
+            </div>
+
+            <div class="process-step reveal reveal-d2 text-center">
+                <div class="process-step-inner">
+                    <div class="w-[52px] h-[52px] rounded-full border-2 border-brand-navy bg-brand-navy text-brand-gold
+                                font-serif text-xl font-bold flex items-center justify-center mx-auto mb-6">2</div>
+                    <h3 class="text-brand-navy font-semibold mb-3 text-base">Access Billing Data</h3>
+                    <p class="text-brand-gray text-sm leading-relaxed">
+                        Your team provides historical invoice archives. No new software installations.
+                        No changes to your daily logistics or finance workflows.
+                    </p>
+                </div>
+            </div>
+
+            <div class="process-step reveal reveal-d3 text-center">
+                <div class="process-step-inner">
+                    <div class="w-[52px] h-[52px] rounded-full border-2 border-brand-navy bg-brand-navy text-brand-gold
+                                font-serif text-xl font-bold flex items-center justify-center mx-auto mb-6">3</div>
+                    <h3 class="text-brand-navy font-semibold mb-3 text-base">Forensic Reconciliation</h3>
+                    <p class="text-brand-gray text-sm leading-relaxed">
+                        Our algorithms cross-reference every invoice line against your executed carrier
+                        contracts, isolating every billing variance and overcharge.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 4: gold fill signals the value delivery moment -->
+            <div class="process-step reveal reveal-d4 text-center">
+                <div class="process-step-inner">
+                    <div class="w-[52px] h-[52px] rounded-full border-2 border-brand-gold bg-brand-gold text-brand-navy
+                                font-serif text-xl font-bold flex items-center justify-center mx-auto mb-6">4</div>
+                    <h3 class="text-brand-navy font-semibold mb-3 text-base">Dispute & Recovery</h3>
+                    <p class="text-brand-gray text-sm leading-relaxed">
+                        We file formal disputes with your carriers, track the recovery lifecycle, and deliver
+                        detailed reporting. You receive capital. We earn our contingency fee.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     TRUST STRIP  [NEW SECTION]
+     Dark band with three plain-language objection-handlers
+     directly before the contact form to reduce friction.
+═══════════════════════════════════════════════════════ -->
+<section class="trust-strip py-16">
+    <div class="container mx-auto px-6">
+        <div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto reveal">
+
+            <div>
+                <span class="gold-bar mb-4"></span>
+                <h4 class="text-white font-serif text-lg mb-2">No Commitment Required</h4>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    Submitting an inquiry triggers zero obligation. We execute a Mutual NDA
+                    before any data review begins — there is nothing at risk in starting the conversation.
+                </p>
+            </div>
+
+            <div class="md:border-x md:border-white/8 md:px-8">
+                <span class="gold-bar mb-4"></span>
+                <h4 class="text-white font-serif text-lg mb-2">Zero Operational Disruption</h4>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    We work exclusively from historical invoice archives you already possess.
+                    No new systems, no software integrations, no changes to your live operations.
+                </p>
+            </div>
+
+            <div>
+                <span class="gold-bar mb-4"></span>
+                <h4 class="text-white font-serif text-lg mb-2">Results-Only Compensation</h4>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    Our 30% fee applies only to capital we actually recover. If the audit yields
+                    nothing, you pay nothing. Our interests are structurally identical to yours.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CONTACT / INTAKE FORM
+     CHANGE: Two-column layout (dark sidebar + form panel)
+     The sidebar supplies context and objection-handling;
+     the form panel stays clean and task-focused.
+═══════════════════════════════════════════════════════ -->
+<section id="contact" class="py-24 bg-brand-light flex-grow">
+    <div class="container mx-auto px-6">
+
+        <div class="text-center mb-12 reveal">
+            <span class="section-eyebrow mb-4">Confidential Intake</span>
+            <h2 class="font-serif text-3xl text-brand-navy mb-4">Request a Confidential Audit Review</h2>
+            <p class="text-brand-gray max-w-md mx-auto text-sm">
+                Submit your operational parameters below. We provide a secure Mutual NDA prior to
+                discussing any specific carrier data.
+            </p>
+        </div>
+
+        <!-- Success Panel (appears on form submission) -->
+        <div id="fs-success"
+             class="hidden max-w-2xl mx-auto bg-white p-10 rounded-sm border-l-4 border-green-600 shadow-sm text-center mb-10">
+            <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <h3 class="text-brand-navy font-serif text-2xl mb-2">Request Received</h3>
+            <p class="text-brand-gray">
+                Your inquiry has been securely logged. The Managing Director will contact you
+                shortly to execute preliminary NDAs.
+            </p>
+        </div>
+
+        <!-- Error Panel -->
+        <div id="fs-error"
+             class="hidden max-w-2xl mx-auto bg-red-50 p-4 border border-red-200 text-red-700 text-sm mb-6 rounded-sm">
+            Something went wrong. Please verify your information and try again, or
+            <a href="mailto:bradley@frictionlessoperations.com" class="underline font-medium">email us directly</a>.
+        </div>
+
+        <!-- Two-column contact grid -->
+        <div id="contact-grid-wrapper" class="max-w-[960px] mx-auto reveal">
+            <div class="contact-wrapper">
+                <div class="contact-grid">
+
+                    <!-- Dark sidebar: rationale for acting now -->
+                    <aside class="contact-sidebar">
+                        <div>
+                            <span class="gold-bar mb-5"></span>
+                            <h3 class="font-serif text-xl text-white mb-4 leading-snug">
+                                Why Qualified<br>Companies Act Now
+                            </h3>
+                            <p class="text-slate-400 text-sm leading-relaxed mb-8">
+                                Carrier overbillings compound with each billing cycle. The lookback window
+                                is finite. Recoverable capital does not wait indefinitely.
+                            </p>
+
+                            <ul class="space-y-4">
+                                <li class="flex items-start gap-3">
+                                    <div class="w-5 h-5 rounded-sm bg-brand-gold/15 border border-brand-gold/30
+                                                flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3 h-3 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-white text-sm font-medium">No upfront cost, ever</div>
+                                        <div class="text-slate-500 text-xs mt-0.5">Pure contingency model</div>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <div class="w-5 h-5 rounded-sm bg-brand-gold/15 border border-brand-gold/30
+                                                flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3 h-3 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-white text-sm font-medium">NDA before data review</div>
+                                        <div class="text-slate-500 text-xs mt-0.5">Full confidentiality from day one</div>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <div class="w-5 h-5 rounded-sm bg-brand-gold/15 border border-brand-gold/30
+                                                flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3 h-3 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-white text-sm font-medium">Zero operational disruption</div>
+                                        <div class="text-slate-500 text-xs mt-0.5">Historical invoices only</div>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <div class="w-5 h-5 rounded-sm bg-brand-gold/15 border border-brand-gold/30
+                                                flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <svg class="w-3 h-3 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-white text-sm font-medium">1–3 year lookback</div>
+                                        <div class="text-slate-500 text-xs mt-0.5">Maximizes recovery potential</div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Direct email at bottom -->
+                        <div class="pt-6 border-t border-white/8">
+                            <div class="text-[10px] text-slate-600 uppercase tracking-widest mb-2">Direct Line</div>
+                            <a href="mailto:bradley@frictionlessoperations.com"
+                               class="text-slate-400 hover:text-brand-gold transition-colors text-sm break-all leading-relaxed">
+                                bradley@frictionlessoperations.com
+                            </a>
+                        </div>
+                    </aside>
+
+                    <!-- Form panel -->
+                    <div class="contact-form-panel">
+                        <!-- !! IMPORTANT: Replace YOUR_FORMSPREE_ID before deploying !! -->
+                        <form id="audit-form" action="https://formspree.io/f/YOUR_FORMSPREE_ID" method="POST"
+                              novalidate>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
+                                           for="name">Full Name <span class="text-red-500" aria-hidden="true">*</span></label>
+                                    <input class="w-full px-4 py-3 text-sm rounded-sm" id="name"
+                                           name="Full_Name" type="text" placeholder="Jane Doe"
+                                           autocomplete="name" required aria-required="true">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
+                                           for="company">Company Name <span class="text-red-500" aria-hidden="true">*</span></label>
+                                    <input class="w-full px-4 py-3 text-sm rounded-sm" id="company"
+                                           name="Company_Name" type="text" placeholder="Acme Logistics Inc."
+                                           autocomplete="organization" required aria-required="true">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
+                                           for="email">Business Email <span class="text-red-500" aria-hidden="true">*</span></label>
+                                    <input class="w-full px-4 py-3 text-sm rounded-sm" id="email"
+                                           name="Email" type="email" placeholder="jane@company.com"
+                                           autocomplete="email" required aria-required="true">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
+                                           for="phone">
+                                        Phone Number
+                                        <span class="text-slate-400 font-normal normal-case tracking-normal ml-1">(Optional)</span>
+                                    </label>
+                                    <input class="w-full px-4 py-3 text-sm rounded-sm" id="phone"
+                                           name="Phone" type="tel" placeholder="(555) 000-0000"
+                                           autocomplete="tel">
+                                </div>
+                            </div>
+
+                            <div class="mb-8">
+                                <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
+                                       for="spend">Estimated Annual Freight Spend <span class="text-red-500" aria-hidden="true">*</span></label>
+                                <div class="select-wrapper">
+                                    <select class="w-full px-4 py-3 text-sm rounded-sm appearance-none cursor-pointer"
+                                            id="spend" name="Annual_Spend" required aria-required="true">
+                                        <option value="" disabled selected>Select Spend Range…</option>
+                                        <option value="$5M - $20M">$5M – $20M</option>
+                                        <option value="$20M - $50M">$20M – $50M</option>
+                                        <option value="$50M+">$50M+</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- NDA Attestation Checkbox -->
+                            <div class="mb-8 flex items-start p-4 bg-slate-50 border border-slate-200 rounded-sm">
+                                <div class="flex items-center h-5 mt-0.5 flex-shrink-0">
+                                    <input type="checkbox" id="nda-confirm" name="NDA_Authorization"
+                                           value="Confirmed"
+                                           class="w-4 h-4 border-slate-300 rounded-sm text-brand-navy cursor-pointer"
+                                           required aria-required="true">
+                                </div>
+                                <label for="nda-confirm" class="ml-3 text-sm text-slate-600 cursor-pointer leading-relaxed">
+                                    I understand that Frictionless Operations requires a Mutual Non-Disclosure Agreement (NDA)
+                                    prior to reviewing any historical billing matrices or corporate rate data.
+                                </label>
+                            </div>
+
+                            <button type="submit" id="audit-submit-btn"
+                                    class="w-full btn-primary px-8 py-4 uppercase tracking-widest text-sm rounded-sm
+                                           font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                Submit Audit Request
+                            </button>
+                        </form>
+                    </div>
+                </div><!-- /.contact-grid -->
+            </div><!-- /.contact-wrapper -->
+        </div><!-- /#contact-grid-wrapper -->
+
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+     CHANGE: Email address now visible in footer body.
+     CHANGE: Subtitle made more specific.
+     ADDITION: Secondary footer line with service descriptor.
+═══════════════════════════════════════════════════════ -->
+<footer class="bg-brand-navy text-slate-400 py-12 border-t border-white/10">
+    <div class="container mx-auto px-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+            <div>
+                <span class="font-serif font-bold text-xl tracking-wide uppercase text-white">
+                    Frictionless <span class="font-light text-slate-500">Operations</span>
+                </span>
+                <p class="text-sm mt-2 max-w-xs leading-relaxed">
+                    Data-driven fiduciary strategy for enterprise freight spend.
+                </p>
+                <a href="mailto:bradley@frictionlessoperations.com"
+                   class="mt-3 block text-sm text-slate-500 hover:text-brand-gold transition-colors">
+                    bradley@frictionlessoperations.com
+                </a>
+            </div>
+            <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                <button type="button" id="open-privacy-btn"
+                        class="hover:text-white transition-colors cursor-pointer">
+                    Privacy Policy
+                </button>
+                <button type="button" id="open-tos-btn"
+                        class="hover:text-white transition-colors cursor-pointer">
+                    Terms of Service
+                </button>
+            </div>
+        </div>
+        <div class="mt-8 pt-6 border-t border-white/6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-600">
+            <span>&copy; 2026 Frictionless Operations LLC. All rights reserved.</span>
+            <span class="text-slate-700 uppercase tracking-widest text-[10px]">
+                Enterprise Freight Audit &amp; Capital Recovery
+            </span>
+        </div>
+    </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Privacy Policy (unchanged from original)
+═══════════════════════════════════════════════════════ -->
+<div id="privacy-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title"
+     class="fixed inset-0 z-[100] hidden items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
+    <div class="modal-backdrop absolute inset-0 bg-brand-navy/80 backdrop-blur-sm"></div>
+    <div class="modal-content bg-white w-full max-w-3xl max-h-[85vh] rounded-sm shadow-2xl relative flex flex-col
+                transform scale-95 transition-transform duration-300">
+        <div class="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0">
+            <h3 id="privacy-modal-title" class="font-serif text-2xl text-brand-navy">Privacy Policy</h3>
+            <button type="button" class="modal-close-btn text-slate-400 hover:text-brand-navy transition-colors"
+                    data-modal="privacy-modal" aria-label="Close Privacy Policy">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="p-6 md:p-8 overflow-y-auto text-sm text-slate-600 space-y-6 leading-relaxed">
+            <p><strong>Last Updated: June 1, 2026</strong></p>
+            <p>Frictionless Operations LLC ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy
+               explains how we collect, use, disclose, and safeguard your information when you visit our website or engage
+               our enterprise freight audit services.</p>
+            <h4 class="text-base font-semibold text-brand-navy">1. Information We Collect</h4>
+            <p>We primarily collect Business-to-Business (B2B) information. This includes:</p>
+            <ul class="list-disc pl-5 space-y-2">
+                <li><strong>Contact Data:</strong> Full name, corporate email address, phone number, and company name
+                    provided via our secure intake forms.</li>
+                <li><strong>Operational Data:</strong> Estimated annual freight spend and carrier network details
+                    provided during the initial consultation phase.</li>
+                <li><strong>Financial &amp; Carrier Data:</strong> Upon execution of a Mutual Non-Disclosure Agreement (NDA),
+                    we may process historical carrier invoices, rate matrices, and accessorial schedules strictly
+                    for audit purposes.</li>
+            </ul>
+            <h4 class="text-base font-semibold text-brand-navy">2. How We Use Your Information</h4>
+            <ul class="list-disc pl-5 space-y-2">
+                <li>Facilitate the execution of Mutual NDAs and Master Service Agreements (MSAs).</li>
+                <li>Execute post-payment forensic audits on historical freight spend.</li>
+                <li>Compile and transmit formal billing disputes to your carriers on your behalf
+                    (as authorized by a Letter of Authorization).</li>
+                <li>Communicate audit findings, variance reports, and operational updates.</li>
+            </ul>
+            <h4 class="text-base font-semibold text-brand-navy">3. Data Security &amp; Confidentiality</h4>
+            <p>We operate as a fiduciary proxy. Client data is treated with the highest degree of confidentiality.
+               We implement enterprise-grade security measures to protect against unauthorized access, alteration,
+               disclosure, or destruction of your corporate data. We do not sell, rent, or trade your operational
+               data to third parties under any circumstances.</p>
+            <h4 class="text-base font-semibold text-brand-navy">4. Data Sharing</h4>
+            <p>Information is only shared with third parties (specifically, your designated carriers) to the exact
+               extent necessary to file and substantiate billing disputes on your behalf, governed by your explicit
+               Letter of Authorization.</p>
+            <h4 class="text-base font-semibold text-brand-navy">5. Contact Us</h4>
+            <p>If you have questions about this Privacy Policy, please contact:
+               <a href="mailto:bradley@frictionlessoperations.com"
+                  class="text-brand-gold hover:underline">bradley@frictionlessoperations.com</a></p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Terms of Service (unchanged from original)
+═══════════════════════════════════════════════════════ -->
+<div id="tos-modal" role="dialog" aria-modal="true" aria-labelledby="tos-modal-title"
+     class="fixed inset-0 z-[100] hidden items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
+    <div class="modal-backdrop absolute inset-0 bg-brand-navy/80 backdrop-blur-sm"></div>
+    <div class="modal-content bg-white w-full max-w-3xl max-h-[85vh] rounded-sm shadow-2xl relative flex flex-col
+                transform scale-95 transition-transform duration-300">
+        <div class="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0">
+            <h3 id="tos-modal-title" class="font-serif text-2xl text-brand-navy">Terms of Service</h3>
+            <button type="button" class="modal-close-btn text-slate-400 hover:text-brand-navy transition-colors"
+                    data-modal="tos-modal" aria-label="Close Terms of Service">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="p-6 md:p-8 overflow-y-auto text-sm text-slate-600 space-y-6 leading-relaxed">
+            <p><strong>Last Updated: June 1, 2026</strong></p>
+            <p>These Terms of Service govern your access to and use of the Frictionless Operations LLC website and
+               preliminary consultation services. Formal engagement of our audit services is governed separately by
+               a Master Service Agreement (MSA) and Mutual Non-Disclosure Agreement (NDA).</p>
+            <h4 class="text-base font-semibold text-brand-navy">1. Scope of Website Services</h4>
+            <p>The content provided on this website is for informational purposes, detailing our methodology for
+               post-payment freight auditing and capital recovery. Submitting an inquiry via our intake form does
+               not establish a formal fiduciary or agent relationship until binding agreements are executed.</p>
+            <h4 class="text-base font-semibold text-brand-navy">2. The Contingency Audit Model</h4>
+            <p>Our core service operates on a pure contingency basis. Details regarding our 30% performance fee,
+               historical lookback periods, and specific operational boundaries will be explicitly defined in the MSA.
+               We make no absolute guarantees of capital recovery prior to forensic evaluation of your carrier matrices.</p>
+            <h4 class="text-base font-semibold text-brand-navy">3. Client Obligations</h4>
+            <p>By requesting an audit review, you attest that you are an authorized representative of your company.
+               To successfully execute our service following an MSA, clients are obligated to provide a signed Letter
+               of Authorization (LOA) on corporate letterhead and grant necessary access to historical billing records.</p>
+            <h4 class="text-base font-semibold text-brand-navy">4. Intellectual Property</h4>
+            <p>All content, branding, methodologies, and proprietary processes displayed on this website are the
+               intellectual property of Frictionless Operations LLC and may not be copied, reproduced, or distributed
+               without express written permission.</p>
+            <h4 class="text-base font-semibold text-brand-navy">5. Limitation of Liability</h4>
+            <p>In no event shall Frictionless Operations LLC be liable for any indirect, consequential, or incidental
+               damages arising out of your use of this website. Our liability regarding audit execution is strictly
+               limited to the terms negotiated within the formal MSA.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     STICKY CTA PILL  [NEW]
+     Floats into view (bottom-right) once the hero section
+     has scrolled out of the viewport. Desktop only.
+═══════════════════════════════════════════════════════ -->
+<div id="sticky-cta" class="fixed bottom-6 right-6 z-20 hidden md:block" aria-hidden="true">
+    <a href="#contact"
+       class="btn-gold flex items-center gap-2.5 px-5 py-3 rounded-sm shadow-xl text-xs font-semibold uppercase tracking-widest">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        Request Audit
+    </a>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────────────────
+   MODAL SYSTEM
+   Fully accessible: focus trap, aria-expanded, returns
+   focus to the opener element on close.
+───────────────────────────────────────────────────── */
+const FOCUSABLE_SELECTORS = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
+let _lastFocus = null;
+
+function openModal(id) {
+    const modal   = document.getElementById(id);
+    const content = modal.querySelector('.modal-content');
+    _lastFocus    = document.activeElement;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-95');
+        content.classList.add('scale-100');
+    }));
+    document.body.style.overflow = 'hidden';
+
+    const firstFocusable = content.querySelector(FOCUSABLE_SELECTORS);
+    if (firstFocusable) setTimeout(() => firstFocusable.focus(), 50);
+}
+
+function closeModal(id) {
+    const modal   = document.getElementById(id);
+    const content = modal.querySelector('.modal-content');
+    modal.classList.add('opacity-0');
+    content.classList.remove('scale-100');
+    content.classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }, 300);
+    if (_lastFocus) { _lastFocus.focus(); _lastFocus = null; }
+}
+
+const MODAL_IDS = ['privacy-modal', 'tos-modal'];
+
+document.addEventListener('keydown', e => {
+    const openModalId = MODAL_IDS.find(id => {
+        const m = document.getElementById(id);
+        return m && !m.classList.contains('hidden');
+    });
+    if (!openModalId) return;
+    if (e.key === 'Escape') { closeModal(openModalId); return; }
+    if (e.key !== 'Tab') return;
+
+    const modal      = document.getElementById(openModalId);
+    const focusables = [...modal.querySelectorAll(FOCUSABLE_SELECTORS)];
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last  = focusables[focusables.length - 1];
+    if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+});
+
+document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.addEventListener('click', () => {
+        const openModalId = MODAL_IDS.find(id => {
+            const m = document.getElementById(id);
+            return m && !m.classList.contains('hidden');
+        });
+        if (openModalId) closeModal(openModalId);
+    });
+});
+
+document.querySelectorAll('.modal-close-btn').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.dataset.modal));
+});
+
+document.getElementById('open-privacy-btn').addEventListener('click', () => openModal('privacy-modal'));
+document.getElementById('open-tos-btn').addEventListener('click',     () => openModal('tos-modal'));
+
+
+/* ─────────────────────────────────────────────────────
+   MOBILE MENU
+───────────────────────────────────────────────────── */
+const hamburger      = document.getElementById('nav-hamburger');
+const mobileMenu     = document.getElementById('mobile-menu');
+const mobileBackdrop = document.getElementById('mobile-backdrop');
+
+function openMobileMenu() {
+    mobileMenu.classList.add('open');
+    mobileBackdrop.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    hamburger.setAttribute('aria-expanded', 'true');
+    const firstLink = mobileMenu.querySelector('a[href]');
+    if (firstLink) firstLink.focus();
+}
+
+function closeMobileMenu() {
+    mobileMenu.classList.remove('open');
+    mobileBackdrop.classList.remove('open');
+    document.body.style.overflow = '';
+    hamburger.setAttribute('aria-expanded', 'false');
+    hamburger.focus();
+}
+
+hamburger.addEventListener('click', openMobileMenu);
+mobileBackdrop.addEventListener('click', closeMobileMenu);
+document.getElementById('mobile-close-btn').addEventListener('click', closeMobileMenu);
+mobileMenu.querySelectorAll('a[href]').forEach(link => link.addEventListener('click', closeMobileMenu));
+
+
+/* ─────────────────────────────────────────────────────
+   SCROLL-AWARE NAVIGATION
+───────────────────────────────────────────────────── */
+const nav = document.getElementById('main-nav');
+
+function updateNav() {
+    nav.classList.toggle('scrolled', window.scrollY > 60);
+}
+window.addEventListener('scroll', updateNav, { passive: true });
+updateNav();
+
+
+/* ─────────────────────────────────────────────────────
+   STICKY CTA — appears after the hero leaves the viewport
+───────────────────────────────────────────────────── */
+const stickyCta = document.getElementById('sticky-cta');
+const heroEl    = document.getElementById('hero');
+
+if (stickyCta && heroEl) {
+    const stickyObserver = new IntersectionObserver(entries => {
+        const heroVisible = entries[0].isIntersecting;
+        stickyCta.classList.toggle('visible', !heroVisible);
+        stickyCta.setAttribute('aria-hidden', String(heroVisible));
+    }, { threshold: 0 });
+    stickyObserver.observe(heroEl);
+}
+
+
+/* ─────────────────────────────────────────────────────
+   INTERSECTION OBSERVER — Scroll-triggered section reveals
+───────────────────────────────────────────────────── */
+const revealObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObserver.unobserve(entry.target);
+        }
+    });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+
+/* ─────────────────────────────────────────────────────
+   COUNTER ANIMATION — Trust-bar statistics
+   Uses rAF loop with cubic ease-out.
+───────────────────────────────────────────────────── */
+function animateCounter(el, target, prefix, suffix, duration) {
+    const start = performance.now();
+    (function tick(now) {
+        const t      = Math.min((now - start) / duration, 1);
+        const eased  = 1 - Math.pow(1 - t, 3);
+        el.textContent = prefix + Math.round(eased * target) + suffix;
+        if (t < 1) requestAnimationFrame(tick);
+    })(start);
+}
+
+const counterObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const el     = entry.target;
+        const target = parseInt(el.dataset.target, 10);
+        const prefix = el.dataset.prefix || '';
+        const suffix = el.dataset.suffix || '';
+        if (target > 0) animateCounter(el, target, prefix, suffix, 900);
+        counterObserver.unobserve(el);
+    });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('.stat-value[data-target]').forEach(el => {
+    if (parseInt(el.dataset.target, 10) > 0) counterObserver.observe(el);
+});
+
+
+/* ─────────────────────────────────────────────────────
+   FORM SUBMISSION — Formspree via fetch
+   CHANGE: hides entire contact-grid-wrapper on success
+───────────────────────────────────────────────────── */
+const form      = document.getElementById('audit-form');
+const submitBtn = document.getElementById('audit-submit-btn');
+
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="btn-spinner"></span>Submitting Request…';
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (response.ok) {
+            document.getElementById('fs-success').classList.remove('hidden');
+            document.getElementById('fs-error').classList.add('hidden');
+            form.reset();
+            const gridWrapper = document.getElementById('contact-grid-wrapper');
+            if (gridWrapper) gridWrapper.classList.add('hidden');
+            document.getElementById('fs-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            throw new Error('Non-OK response');
+        }
+    } catch {
+        document.getElementById('fs-error').classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Audit Request';
+    }
+});
+</script>
+
+</body>
+</html>
