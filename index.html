@@ -452,9 +452,6 @@
 
 <!-- ═══════════════════════════════════════════════════════
      HERO
-     CHANGE: "Absolute Recovery" → text-brand-gold (more punch)
-     CHANGE: Two-column flex layout for report card (lg+)
-     ADDITION: Right-side audit report sample card
 ═══════════════════════════════════════════════════════ -->
 <header id="hero" class="hero-section hero-grid hero-grain text-white pt-32 pb-24 lg:pt-40 lg:pb-32 overflow-hidden">
     <div class="container mx-auto px-6">
@@ -513,9 +510,7 @@
                 </div>
             </div>
 
-            <!-- Right: Sample Audit Report Card — visible lg+ only.
-                 Illustrates exactly what the service produces.
-                 pointer-events: none keeps it non-interactive. -->
+            <!-- Right: Sample Audit Report Card -->
             <div class="hidden lg:flex flex-1 justify-center lg:justify-end items-center"
                  aria-hidden="true" style="pointer-events: none;">
                 <div class="hero-deco-card w-full max-w-[360px] border border-white/10 rounded-sm
@@ -591,7 +586,7 @@
                             </div>
                             <span class="text-brand-gold font-bold text-lg tabular-nums font-sans">$1,810</span>
                         </div>
-                        <!-- Animated progress bar (CSS animation, fires once on load) -->
+                        <!-- Animated progress bar -->
                         <div class="h-[3px] rounded-full bg-white/5 overflow-hidden">
                             <div class="report-bar-fill h-full rounded-full
                                         bg-gradient-to-r from-brand-gold/60 to-brand-gold"
@@ -609,8 +604,7 @@
 </header>
 
 <!-- ═══════════════════════════════════════════════════════
-     METHODOLOGY — Structural Inefficiencies
-     ADDITION: SVG icons on each card for visual differentiation
+     METHODOLOGY
 ═══════════════════════════════════════════════════════ -->
 <section id="methodology" class="py-24 bg-brand-light">
     <div class="container mx-auto px-6">
@@ -627,7 +621,6 @@
 
             <!-- Card 1: Contractual Drift -->
             <div class="card-hover reveal reveal-d1 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
-                <!-- Icon: document with diverging arrows (contract vs. applied rate) -->
                 <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <rect x="5" y="4" width="19" height="24" rx="1.5"/>
@@ -649,7 +642,6 @@
 
             <!-- Card 2: Accessorial Hemorrhage -->
             <div class="card-hover reveal reveal-d2 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
-                <!-- Icon: funnel with leakage drip -->
                 <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M6 8 L32 8 L23 19 L23 28 L15 28 L15 19 Z"/>
@@ -668,15 +660,14 @@
 
             <!-- Card 3: The AP Dilemma -->
             <div class="card-hover reveal reveal-d3 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
-                <!-- Icon: tipped balance scales -->
                 <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <line x1="19" y1="6" x2="19" y2="30"/>
                     <line x1="12" y1="30" x2="26" y2="30"/>
-                    <!-- Left pan (heavier — lower) -->
+                    <!-- Left pan -->
                     <line x1="19" y1="10" x2="7" y2="17"/>
                     <path d="M4 17 C4 20.5 6 22.5 7 22.5 S10 20.5 10 17 Z"/>
-                    <!-- Right pan (lighter — higher) -->
+                    <!-- Right pan -->
                     <line x1="19" y1="10" x2="31" y2="13"/>
                     <path d="M28 13 C28 16.5 30 18.5 31 18.5 S34 16.5 34 13 Z"/>
                 </svg>
@@ -693,9 +684,7 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
-     DARK STATEMENT INTERSTITIAL  [NEW SECTION]
-     A full-width editorial break: pull-quote on dark navy
-     reinforces the core problem and primes the CTA.
+     DARK STATEMENT INTERSTITIAL
 ═══════════════════════════════════════════════════════ -->
 <section class="interstitial py-20 lg:py-28">
     <div class="container mx-auto px-6">
@@ -754,7 +743,6 @@
 
 <!-- ═══════════════════════════════════════════════════════
      OUR PROCESS
-     ADDITION: .process-step-inner for hover lift animation
 ═══════════════════════════════════════════════════════ -->
 <section id="process" class="py-24 bg-white border-t border-slate-100">
     <div class="container mx-auto px-6">
@@ -803,7 +791,7 @@
                 </div>
             </div>
 
-            <!-- Step 4: gold fill signals the value delivery moment -->
+            <!-- Step 4 -->
             <div class="process-step reveal reveal-d4 text-center">
                 <div class="process-step-inner">
                     <div class="w-[52px] h-[52px] rounded-full border-2 border-brand-gold bg-brand-gold text-brand-navy
@@ -820,9 +808,7 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
-     TRUST STRIP  [NEW SECTION]
-     Dark band with three plain-language objection-handlers
-     directly before the contact form to reduce friction.
+     TRUST STRIP
 ═══════════════════════════════════════════════════════ -->
 <section class="trust-strip py-16">
     <div class="container mx-auto px-6">
@@ -860,9 +846,6 @@
 
 <!-- ═══════════════════════════════════════════════════════
      CONTACT / INTAKE FORM
-     CHANGE: Two-column layout (dark sidebar + form panel)
-     The sidebar supplies context and objection-handling;
-     the form panel stays clean and task-focused.
 ═══════════════════════════════════════════════════════ -->
 <section id="contact" class="py-24 bg-brand-light flex-grow">
     <div class="container mx-auto px-6">
@@ -876,7 +859,7 @@
             </p>
         </div>
 
-        <!-- Success Panel (appears on form submission) -->
+        <!-- Success Panel -->
         <div id="fs-success"
              class="hidden max-w-2xl mx-auto bg-white p-10 rounded-sm border-l-4 border-green-600 shadow-sm text-center mb-10">
             <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -903,7 +886,7 @@
             <div class="contact-wrapper">
                 <div class="contact-grid">
 
-                    <!-- Dark sidebar: rationale for acting now -->
+                    <!-- Dark sidebar -->
                     <aside class="contact-sidebar">
                         <div>
                             <span class="gold-bar mb-5"></span>
@@ -979,8 +962,7 @@
 
                     <!-- Form panel -->
                     <div class="contact-form-panel">
-                        <!-- !! IMPORTANT: Replace YOUR_FORMSPREE_ID before deploying !! -->
-                        <form id="audit-form" action="https://formspree.io/f/YOUR_FORMSPREE_ID" method="POST"
+                        <form id="audit-form" action="https://formspree.io/f/xaqzwnrp" method="POST"
                               novalidate>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -1064,9 +1046,6 @@
 
 <!-- ═══════════════════════════════════════════════════════
      FOOTER
-     CHANGE: Email address now visible in footer body.
-     CHANGE: Subtitle made more specific.
-     ADDITION: Secondary footer line with service descriptor.
 ═══════════════════════════════════════════════════════ -->
 <footer class="bg-brand-navy text-slate-400 py-12 border-t border-white/10">
     <div class="container mx-auto px-6">
@@ -1104,7 +1083,7 @@
 </footer>
 
 <!-- ═══════════════════════════════════════════════════════
-     MODAL: Privacy Policy (unchanged from original)
+     MODAL: Privacy Policy
 ═══════════════════════════════════════════════════════ -->
 <div id="privacy-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title"
      class="fixed inset-0 z-[100] hidden items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
@@ -1162,7 +1141,7 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
-     MODAL: Terms of Service (unchanged from original)
+     MODAL: Terms of Service
 ═══════════════════════════════════════════════════════ -->
 <div id="tos-modal" role="dialog" aria-modal="true" aria-labelledby="tos-modal-title"
      class="fixed inset-0 z-[100] hidden items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
@@ -1208,9 +1187,7 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
-     STICKY CTA PILL  [NEW]
-     Floats into view (bottom-right) once the hero section
-     has scrolled out of the viewport. Desktop only.
+     STICKY CTA PILL
 ═══════════════════════════════════════════════════════ -->
 <div id="sticky-cta" class="fixed bottom-6 right-6 z-20 hidden md:block" aria-hidden="true">
     <a href="#contact"
@@ -1223,15 +1200,12 @@
     </a>
 </div>
 
-
 <!-- ═══════════════════════════════════════════════════════
      JAVASCRIPT
 ═══════════════════════════════════════════════════════ -->
 <script>
 /* ─────────────────────────────────────────────────────
    MODAL SYSTEM
-   Fully accessible: focus trap, aria-expanded, returns
-   focus to the opener element on close.
 ───────────────────────────────────────────────────── */
 const FOCUSABLE_SELECTORS = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
 let _lastFocus = null;
@@ -1308,7 +1282,6 @@ document.querySelectorAll('.modal-close-btn').forEach(btn => {
 document.getElementById('open-privacy-btn').addEventListener('click', () => openModal('privacy-modal'));
 document.getElementById('open-tos-btn').addEventListener('click',     () => openModal('tos-modal'));
 
-
 /* ─────────────────────────────────────────────────────
    MOBILE MENU
 ───────────────────────────────────────────────────── */
@@ -1338,7 +1311,6 @@ mobileBackdrop.addEventListener('click', closeMobileMenu);
 document.getElementById('mobile-close-btn').addEventListener('click', closeMobileMenu);
 mobileMenu.querySelectorAll('a[href]').forEach(link => link.addEventListener('click', closeMobileMenu));
 
-
 /* ─────────────────────────────────────────────────────
    SCROLL-AWARE NAVIGATION
 ───────────────────────────────────────────────────── */
@@ -1350,9 +1322,8 @@ function updateNav() {
 window.addEventListener('scroll', updateNav, { passive: true });
 updateNav();
 
-
 /* ─────────────────────────────────────────────────────
-   STICKY CTA — appears after the hero leaves the viewport
+   STICKY CTA
 ───────────────────────────────────────────────────── */
 const stickyCta = document.getElementById('sticky-cta');
 const heroEl    = document.getElementById('hero');
@@ -1366,9 +1337,8 @@ if (stickyCta && heroEl) {
     stickyObserver.observe(heroEl);
 }
 
-
 /* ─────────────────────────────────────────────────────
-   INTERSECTION OBSERVER — Scroll-triggered section reveals
+   INTERSECTION OBSERVER
 ───────────────────────────────────────────────────── */
 const revealObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
@@ -1381,10 +1351,8 @@ const revealObserver = new IntersectionObserver(entries => {
 
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
-
 /* ─────────────────────────────────────────────────────
-   COUNTER ANIMATION — Trust-bar statistics
-   Uses rAF loop with cubic ease-out.
+   COUNTER ANIMATION
 ───────────────────────────────────────────────────── */
 function animateCounter(el, target, prefix, suffix, duration) {
     const start = performance.now();
@@ -1412,10 +1380,8 @@ document.querySelectorAll('.stat-value[data-target]').forEach(el => {
     if (parseInt(el.dataset.target, 10) > 0) counterObserver.observe(el);
 });
 
-
 /* ─────────────────────────────────────────────────────
-   FORM SUBMISSION — Formspree via fetch
-   CHANGE: hides entire contact-grid-wrapper on success
+   FORM SUBMISSION
 ───────────────────────────────────────────────────── */
 const form      = document.getElementById('audit-form');
 const submitBtn = document.getElementById('audit-submit-btn');
