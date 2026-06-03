@@ -1394,9 +1394,10 @@ form.addEventListener('submit', async function(e) {
 
     try {
         const response = await fetch(form.action, {
-            method: 'POST',
+            method: form.method || 'POST',
             body: new FormData(form),
-            headers: { 'Accept': 'application/json' }
+            headers: { 'Accept': 'application/json' },
+            mode: 'cors'
         });
 
         if (response.ok) {
