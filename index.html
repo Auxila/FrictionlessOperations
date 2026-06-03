@@ -965,20 +965,25 @@
                         <form id="audit-form" action="https://formspree.io/f/xaqzwnrp" method="POST"
                               novalidate>
 
+                            <!-- Formspree config fields -->
+                            <input type="hidden" name="_subject" value="New Audit Review Request — Frictionless Operations">
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                 <div>
                                     <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
                                            for="name">Full Name <span class="text-red-500" aria-hidden="true">*</span></label>
                                     <input class="w-full px-4 py-3 text-sm rounded-sm" id="name"
                                            name="Full_Name" type="text" placeholder="Jane Doe"
-                                           autocomplete="name" required aria-required="true">
+                                           autocomplete="name" required aria-required="true" data-fs-field>
+                                    <span data-fs-error="Full_Name" class="hidden text-red-500 text-xs mt-1 block"></span>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
                                            for="company">Company Name <span class="text-red-500" aria-hidden="true">*</span></label>
                                     <input class="w-full px-4 py-3 text-sm rounded-sm" id="company"
                                            name="Company_Name" type="text" placeholder="Acme Logistics Inc."
-                                           autocomplete="organization" required aria-required="true">
+                                           autocomplete="organization" required aria-required="true" data-fs-field>
+                                    <span data-fs-error="Company_Name" class="hidden text-red-500 text-xs mt-1 block"></span>
                                 </div>
                             </div>
 
@@ -988,7 +993,8 @@
                                            for="email">Business Email <span class="text-red-500" aria-hidden="true">*</span></label>
                                     <input class="w-full px-4 py-3 text-sm rounded-sm" id="email"
                                            name="email" type="email" placeholder="jane@company.com"
-                                           autocomplete="email" required aria-required="true">
+                                           autocomplete="email" required aria-required="true" data-fs-field>
+                                    <span data-fs-error="email" class="hidden text-red-500 text-xs mt-1 block"></span>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide"
@@ -998,7 +1004,7 @@
                                     </label>
                                     <input class="w-full px-4 py-3 text-sm rounded-sm" id="phone"
                                            name="Phone" type="tel" placeholder="(555) 000-0000"
-                                           autocomplete="tel">
+                                           autocomplete="tel" data-fs-field>
                                 </div>
                             </div>
 
@@ -1007,30 +1013,34 @@
                                        for="spend">Estimated Annual Freight Spend <span class="text-red-500" aria-hidden="true">*</span></label>
                                 <div class="select-wrapper">
                                     <select class="w-full px-4 py-3 text-sm rounded-sm appearance-none cursor-pointer"
-                                            id="spend" name="Annual_Spend" required aria-required="true">
+                                            id="spend" name="Annual_Spend" required aria-required="true" data-fs-field>
                                         <option value="" disabled selected>Select Spend Range…</option>
                                         <option value="$5M - $20M">$5M – $20M</option>
                                         <option value="$20M - $50M">$20M – $50M</option>
                                         <option value="$50M+">$50M+</option>
                                     </select>
                                 </div>
+                                <span data-fs-error="Annual_Spend" class="hidden text-red-500 text-xs mt-1 block"></span>
                             </div>
 
                             <!-- NDA Attestation Checkbox -->
-                            <div class="mb-8 flex items-start p-4 bg-slate-50 border border-slate-200 rounded-sm">
-                                <div class="flex items-center h-5 mt-0.5 flex-shrink-0">
-                                    <input type="checkbox" id="nda-confirm" name="NDA_Authorization"
-                                           value="Confirmed"
-                                           class="w-4 h-4 border-slate-300 rounded-sm text-brand-navy cursor-pointer"
-                                           required aria-required="true">
+                            <div class="mb-8">
+                                <div class="flex items-start p-4 bg-slate-50 border border-slate-200 rounded-sm">
+                                    <div class="flex items-center h-5 mt-0.5 flex-shrink-0">
+                                        <input type="checkbox" id="nda-confirm" name="NDA_Authorization"
+                                               value="Confirmed"
+                                               class="w-4 h-4 border-slate-300 rounded-sm text-brand-navy cursor-pointer"
+                                               required aria-required="true" data-fs-field>
+                                    </div>
+                                    <label for="nda-confirm" class="ml-3 text-sm text-slate-600 cursor-pointer leading-relaxed">
+                                        I understand that Frictionless Operations requires a Mutual Non-Disclosure Agreement (NDA)
+                                        prior to reviewing any historical billing matrices or corporate rate data.
+                                    </label>
                                 </div>
-                                <label for="nda-confirm" class="ml-3 text-sm text-slate-600 cursor-pointer leading-relaxed">
-                                    I understand that Frictionless Operations requires a Mutual Non-Disclosure Agreement (NDA)
-                                    prior to reviewing any historical billing matrices or corporate rate data.
-                                </label>
+                                <span data-fs-error="NDA_Authorization" class="hidden text-red-500 text-xs mt-1 block pl-1"></span>
                             </div>
 
-                            <button type="submit" id="audit-submit-btn"
+                            <button type="submit" id="audit-submit-btn" data-fs-submit-btn
                                     class="w-full btn-primary px-8 py-4 uppercase tracking-widest text-sm rounded-sm
                                            font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                                 Submit Audit Request
@@ -1381,41 +1391,100 @@ document.querySelectorAll('.stat-value[data-target]').forEach(el => {
 });
 
 /* ─────────────────────────────────────────────────────
-   FORM SUBMISSION
+   FORM SUBMISSION — Formspree Vanilla JS Ajax
+   Endpoint: https://formspree.io/f/xaqzwnrp
+   Guide:    Vanilla JS (Ajax) — raw fetch implementation
 ───────────────────────────────────────────────────── */
 const form      = document.getElementById('audit-form');
 const submitBtn = document.getElementById('audit-submit-btn');
 
+/** Clear all [data-fs-error] spans and remove aria-invalid from fields. */
+function clearFieldErrors() {
+    form.querySelectorAll('[data-fs-error]').forEach(el => {
+        el.textContent = '';
+        el.classList.add('hidden');
+    });
+    form.querySelectorAll('[data-fs-field]').forEach(el => {
+        el.removeAttribute('aria-invalid');
+        el.style.borderColor = '';
+    });
+}
+
+/**
+ * Surface a field-level error from Formspree's response.
+ * Sets aria-invalid + red border on the input and populates
+ * the matching [data-fs-error="fieldName"] span.
+ */
+function showFieldError(fieldName, message) {
+    const errorEl = form.querySelector(`[data-fs-error="${fieldName}"]`);
+    const fieldEl = form.querySelector(`[name="${fieldName}"]`);
+    if (errorEl) {
+        const msg = message ? message.charAt(0).toUpperCase() + message.slice(1) : 'This field has an error.';
+        errorEl.textContent = msg.endsWith('.') ? msg : msg + '.';
+        errorEl.classList.remove('hidden');
+    }
+    if (fieldEl) {
+        fieldEl.setAttribute('aria-invalid', 'true');
+        fieldEl.style.borderColor = '#ef4444';
+        fieldEl.style.boxShadow   = '0 0 0 1px #ef4444';
+    }
+}
+
 form.addEventListener('submit', async function(e) {
     e.preventDefault();
+    clearFieldErrors();
 
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="btn-spinner"></span>Submitting Request…';
 
     try {
         const response = await fetch(form.action, {
-            method: form.method || 'POST',
-            body: new FormData(form),
-            headers: { 'Accept': 'application/json' },
-            mode: 'cors'
+            method:  'POST',
+            body:    new FormData(form),
+            headers: { 'Accept': 'application/json' }
         });
 
+        /* Formspree always returns JSON when Accept: application/json is set.
+           .catch(() => ({})) guards against malformed responses on network errors. */
+        const data = await response.json().catch(() => ({}));
+
         if (response.ok) {
+            /* ── Success path ── */
             document.getElementById('fs-success').classList.remove('hidden');
             document.getElementById('fs-error').classList.add('hidden');
             form.reset();
             const gridWrapper = document.getElementById('contact-grid-wrapper');
             if (gridWrapper) gridWrapper.classList.add('hidden');
             document.getElementById('fs-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
         } else {
-            const errorText = await response.text();
-            console.error('Formspree Rejection Payload:', errorText);
-            throw new Error('Form submission rejected by endpoint.');
+            /* ── Error path: parse Formspree structured errors ── */
+            let renderedFieldError = false;
+
+            if (Array.isArray(data.errors) && data.errors.length) {
+                data.errors.forEach(err => {
+                    /* err.field is the form field name; '_form' means a global error */
+                    if (err.field && err.field !== '_form') {
+                        showFieldError(err.field, err.message);
+                        renderedFieldError = true;
+                    }
+                });
+            }
+
+            /* Fall back to the global error banner when no field spans matched */
+            if (!renderedFieldError) {
+                document.getElementById('fs-error').classList.remove('hidden');
+            }
+
+            submitBtn.disabled  = false;
+            submitBtn.textContent = 'Submit Audit Request';
         }
-    } catch (error) {
-        console.error('Transmission Failure:', error);
+
+    } catch (err) {
+        /* Network failure or unexpected exception */
+        console.error('Transmission Failure:', err);
         document.getElementById('fs-error').classList.remove('hidden');
-        submitBtn.disabled = false;
+        submitBtn.disabled    = false;
         submitBtn.textContent = 'Submit Audit Request';
     }
 });
