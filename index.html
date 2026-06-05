@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow">
 
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src https://cdn.tailwindcss.com https://fonts.googleapis.com 'unsafe-eval'
+                   'sha256-kaouYJAIHCGZEX3QQ5aYBGaW6I7kANI4pbdoRaEyKqI='
+                   'sha256-GHKnHFBaR7Rv5JGmvGDphkU19yyxMQUlbF88zjX3KnM='
+                   'sha256-Yj4DZUdQCm+g4C4+pWTkAgvt3aa+xbCahlOqyGlBTj8='
+                   'sha256-Y0abNpsayf0eXC1DgC3+wnTuwjwLSor+U/VMEmZw9rA=';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src https://fonts.gstatic.com;
+        img-src 'self' data:;
+        connect-src https://formspree.io;
+        form-action https://formspree.io;
+        base-uri 'self';
+        object-src 'none'
+    ">
+
     <!-- SEO & Open Graph -->
     <title>Frictionless Operations | Enterprise Freight Audit & Recovery</title>
     <meta name="description" content="Frictionless Operations executes comprehensive, non-invasive freight audit and recovery on a pure contingency basis. Recover capital lost to complex carrier billing variances at zero upfront cost.">
@@ -42,9 +58,37 @@
     }
     </script>
 
+    <!-- ══ Fonts: preconnect → preload → async promote ═══════════════════
+         The Playfair Display + DM Sans stylesheet is fetched at high priority
+         via rel="preload" (as="style") so it never blocks first paint, then
+         promoted to rel="stylesheet" on load by the small loader below. The
+         loader runs as a hashed inline <script> rather than an inline
+         onload= attribute, so the strict CSP needs no 'unsafe-hashes'.
+         <noscript> guarantees the fonts still load with JS disabled.
+         (Individual .woff2 files are intentionally NOT preloaded — Google's
+         font URLs are version-hashed and unstable, which would cause
+         double-downloads; preloading the stylesheet is the maintainable path.) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link id="gf-stylesheet" rel="preload" as="style"
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+    <noscript>
+        <link rel="stylesheet"
+              href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+    </noscript>
+    <script>
+        /* Promote the preloaded font CSS to an applied stylesheet once it has
+           downloaded, without blocking initial render. The listener is attached
+           before load fires; the window-load handler is a safety net for the
+           pathological case where the preload resolved from cache first. */
+        (function () {
+            var gf = document.getElementById('gf-stylesheet');
+            if (!gf) return;
+            function applyFonts() { if (gf.rel !== 'stylesheet') gf.rel = 'stylesheet'; }
+            gf.addEventListener('load', applyFonts, { once: true });
+            window.addEventListener('load', applyFonts);
+        })();
+    </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -1282,6 +1326,7 @@
                                     <input class="w-full px-4 py-3 text-sm rounded-sm" id="phone"
                                            name="Phone" type="tel" placeholder="(555) 000-0000"
                                            autocomplete="tel" data-fs-field>
+                                    <span data-fs-error="Phone" class="hidden text-red-500 text-xs mt-1 block"></span>
                                 </div>
                             </div>
 
@@ -1599,6 +1644,51 @@
 const FOCUSABLE_SELECTORS = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
 let _lastFocus = null;
 
+/* ─────────────────────────────────────────────────────
+   SCROLL LOCK — iOS-compatible, reference-counted
+   ───────────────────────────────────────────────────
+   overflow:hidden on <body> does NOT stop touch scrolling
+   in iOS Safari. The robust cross-browser lock pins the
+   body with position:fixed, offset by the current scrollY,
+   then restores the exact scroll position on release.
+   Reference-counted so overlapping overlays (a modal AND
+   the mobile menu) can't unlock each other prematurely.
+   The scrollbar gutter is compensated with padding-right
+   to prevent the desktop layout shift overflow:hidden caused.
+───────────────────────────────────────────────────── */
+let _scrollLocks = 0;
+let _scrollLockY = 0;
+
+function lockScroll() {
+    if (_scrollLocks === 0) {
+        _scrollLockY = window.scrollY || window.pageYOffset || 0;
+        const gutter = window.innerWidth - document.documentElement.clientWidth;
+        const body   = document.body;
+        body.style.position = 'fixed';
+        body.style.top      = `-${_scrollLockY}px`;
+        body.style.left     = '0';
+        body.style.right    = '0';
+        body.style.width    = '100%';
+        if (gutter > 0) body.style.paddingRight = `${gutter}px`;
+    }
+    _scrollLocks++;
+}
+
+function unlockScroll() {
+    if (_scrollLocks === 0) return;
+    _scrollLocks--;
+    if (_scrollLocks === 0) {
+        const body = document.body;
+        body.style.position     = '';
+        body.style.top          = '';
+        body.style.left         = '';
+        body.style.right        = '';
+        body.style.width        = '';
+        body.style.paddingRight = '';
+        window.scrollTo(0, _scrollLockY);
+    }
+}
+
 function openModal(id) {
     const modal   = document.getElementById(id);
     const content = modal.querySelector('.modal-content');
@@ -1611,7 +1701,7 @@ function openModal(id) {
         content.classList.remove('scale-95');
         content.classList.add('scale-100');
     }));
-    document.body.style.overflow = 'hidden';
+    lockScroll();
 
     const firstFocusable = content.querySelector(FOCUSABLE_SELECTORS);
     if (firstFocusable) setTimeout(() => firstFocusable.focus(), 50);
@@ -1626,7 +1716,7 @@ function closeModal(id) {
     setTimeout(() => {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
-        document.body.style.overflow = '';
+        unlockScroll();
     }, 300);
     if (_lastFocus) { _lastFocus.focus(); _lastFocus = null; }
 }
@@ -1682,7 +1772,7 @@ const mobileBackdrop = document.getElementById('mobile-backdrop');
 function openMobileMenu() {
     mobileMenu.classList.add('open');
     mobileBackdrop.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    lockScroll();
     hamburger.setAttribute('aria-expanded', 'true');
     const firstLink = mobileMenu.querySelector('a[href]');
     if (firstLink) firstLink.focus();
@@ -1691,7 +1781,7 @@ function openMobileMenu() {
 function closeMobileMenu() {
     mobileMenu.classList.remove('open');
     mobileBackdrop.classList.remove('open');
-    document.body.style.overflow = '';
+    unlockScroll();
     hamburger.setAttribute('aria-expanded', 'false');
     hamburger.focus();
 }
@@ -1861,6 +1951,7 @@ function clearFieldErrors() {
     form.querySelectorAll('[data-fs-field]').forEach(el => {
         el.removeAttribute('aria-invalid');
         el.style.borderColor = '';
+        el.style.boxShadow   = '';
     });
 }
 
@@ -1884,9 +1975,103 @@ function showFieldError(fieldName, message) {
     }
 }
 
+/* ─────────────────────────────────────────────────────
+   CLIENT-SIDE VALIDATION MATRIX
+   ───────────────────────────────────────────────────
+   Every field is pre-flighted locally before any network
+   call. Each rule's `validate` returns an error string (or
+   '' when valid). Declaration order is also focus priority:
+   the first failing field receives focus. This eliminates a
+   Formspree round trip for purely local user errors. The
+   matrix is the single source of truth — it reuses the same
+   showFieldError() pipeline the server-error path uses, so
+   inline messaging and ARIA stay consistent across both. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^[\d\s()+.\-]+$/;
+
+const VALIDATION_MATRIX = [
+    {
+        name: 'Full_Name',
+        validate: v => {
+            if (!v)            return 'Please enter your full name.';
+            if (v.length < 2)  return 'Please enter your full name.';
+            return '';
+        }
+    },
+    {
+        name: 'Company_Name',
+        validate: v => v ? '' : 'Please enter your company name.'
+    },
+    {
+        name: 'email',
+        validate: v => {
+            if (!v)                return 'Please enter your business email.';
+            if (!EMAIL_RE.test(v)) return 'Please enter a valid email address.';
+            return '';
+        }
+    },
+    {
+        /* Optional, but if supplied it must look like a phone number. */
+        name: 'Phone',
+        validate: v => {
+            if (!v) return '';
+            const digits = (v.match(/\d/g) || []).length;
+            if (!PHONE_RE.test(v) || digits < 7) {
+                return 'Enter a valid phone number, or leave it blank.';
+            }
+            return '';
+        }
+    },
+    {
+        name: 'Annual_Spend',
+        validate: v => v ? '' : 'Please select your estimated annual freight spend.'
+    },
+    {
+        name: 'NDA_Authorization',
+        validate: (v, field) => field.checked ? '' : 'Please confirm the NDA requirement to proceed.'
+    }
+];
+
+/** Normalize a field's value: '' for an unchecked box, trimmed text otherwise. */
+function getFieldValue(field) {
+    if (!field) return '';
+    if (field.type === 'checkbox') return field.checked ? (field.value || 'on') : '';
+    return (field.value || '').trim();
+}
+
+/**
+ * Run the full matrix. Returns true only when every rule passes.
+ * On failure, surfaces all field errors and focuses the first offender
+ * — without sending anything over the network.
+ */
+function validateForm() {
+    let firstInvalid = null;
+    VALIDATION_MATRIX.forEach(rule => {
+        const field = form.querySelector(`[name="${rule.name}"]`);
+        if (!field) return;
+        const message = rule.validate(getFieldValue(field), field);
+        if (message) {
+            showFieldError(rule.name, message);
+            if (!firstInvalid) firstInvalid = field;
+        }
+    });
+    if (firstInvalid) {
+        firstInvalid.focus({ preventScroll: true });
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+    return true;
+}
+
 form.addEventListener('submit', async function(e) {
     e.preventDefault();
     clearFieldErrors();
+    document.getElementById('fs-error').classList.add('hidden');
+
+    /* Pre-flight the payload locally first. If anything fails, surface the
+       inline errors and bail out before touching the network — no latency
+       penalty for errors the browser can catch on its own. */
+    if (!validateForm()) return;
 
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="btn-spinner"></span>Submitting Request…';
