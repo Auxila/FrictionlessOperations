@@ -7,13 +7,19 @@
 
     <!-- SEO & Open Graph -->
     <title>Frictionless Operations | Enterprise Freight Audit & Recovery</title>
-    <meta name="description" content="Frictionless Operations executes high-density, non-invasive financial leakage mitigation on a pure contingency basis. Recover capital lost to complex carrier billing variances at zero upfront cost.">
+    <meta name="description" content="Frictionless Operations executes comprehensive, non-invasive freight audit and recovery on a pure contingency basis. Recover capital lost to complex carrier billing variances at zero upfront cost.">
     <meta property="og:title" content="Frictionless Operations | Enterprise Freight Audit & Recovery">
-    <meta property="og:description" content="Most enterprise freight bills contain systematic billing errors your AP software is not designed to catch. Our capital recovery auditing recovers those overcharges at zero upfront cost.">
+    <meta property="og:description" content="Most enterprise freight bills contain systematic billing errors your AP software is not designed to catch. Our freight audit and recovery service recovers those overcharges at zero upfront cost.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://frictionlessoperations.com">
     <!-- REPLACE: Add a real branded OG image at /og-image.png before launch -->
     <meta property="og:image" content="https://frictionlessoperations.com/og-image.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Frictionless Operations | Enterprise Freight Audit & Recovery">
+    <meta name="twitter:description" content="Most enterprise freight bills contain systematic billing errors your AP software is not designed to catch. Our freight audit and recovery service recovers those overcharges at zero upfront cost.">
+    <meta name="twitter:image" content="https://frictionlessoperations.com/og-image.png">
 
     <!-- SVG monogram favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230f172a'/><text x='50' y='68' font-family='Georgia,serif' font-size='44' font-weight='700' fill='%23d4af37' text-anchor='middle'>FO</text></svg>">
@@ -22,11 +28,15 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "ProfessionalService",
+      "@type": ["ProfessionalService", "FinancialService"],
       "name": "Frictionless Operations LLC",
       "description": "Enterprise freight audit and capital recovery advisory firm operating on a pure contingency basis.",
       "url": "https://frictionlessoperations.com",
-      "email": "bradley@frictionlessoperations.com",
+      "email": "audit@frictionlessoperations.com",
+      "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "US"
+      },
       "serviceType": ["Freight Audit", "Transportation Payment Audit", "Carrier Contract Analysis", "Capital Recovery"],
       "areaServed": "US"
     }
@@ -74,6 +84,30 @@
             border-radius: 2px;
         }
         *:focus:not(:focus-visible) { outline: none; }
+
+        /* ══ Skip-to-content link ═══════════════════════════
+           Hidden until keyboard-focused. Satisfies WCAG 2.4.1
+           by letting keyboard users bypass the fixed navigation. */
+        .skip-link {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: #0f172a;
+            color: #d4af37;
+            padding: 0.75rem 1.25rem;
+            border-radius: 2px;
+            z-index: 200;
+            text-decoration: none;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transform: translate3d(0, -160px, 0);
+            transition: transform 0.2s var(--drag);
+        }
+        .skip-link:focus {
+            transform: translate3d(0, 0, 0);
+        }
 
         /* ══ Hero ══════════════════════════════════════════ */
         .hero-section {
@@ -205,15 +239,31 @@
         }
         #mobile-backdrop.open { opacity: 1; pointer-events: auto; }
 
-        /* ══ Card hover ═════════════════════════════════════ */
+        /* ══ Card hover ═════════════════════════════════════
+           Transform/opacity only. The lift is a composited
+           translate3d; the drop-shadow lives on an ::after layer
+           that fades via opacity (never animates box-shadow). */
         .card-hover {
-            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            position: relative;
+            transition: transform 0.35s var(--drag), border-color 0.35s var(--drag);
+            will-change: transform;
+        }
+        .card-hover::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            box-shadow: 0 14px 34px rgba(15,23,42,0.12);
+            opacity: 0;
+            transition: opacity 0.35s var(--drag);
+            pointer-events: none;
+            z-index: -1;
         }
         .card-hover:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 32px rgba(15,23,42,0.10);
+            transform: translate3d(0, -4px, 0);
             border-color: rgba(212,175,55,0.3);
         }
+        .card-hover:hover::after { opacity: 1; }
 
         /* ══ Process connector line (desktop only) ══════════ */
         @media (min-width: 768px) {
@@ -233,29 +283,87 @@
         .process-step-inner { transition: transform 0.2s ease; }
         .process-step:hover .process-step-inner { transform: translateY(-3px); }
 
-        /* ══ Entrance Animations ════════════════════════════ */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(22px); }
-            to   { opacity: 1; transform: translateY(0); }
+        /* ═══════════════════════════════════════════════════
+           KINETIC SYSTEM — tokens, easing language, keyframes
+           ───────────────────────────────────────────────────
+           Three curves describe every motion in the page:
+             --drag   heavy decelerate / mass settle (entrances)
+             --spring tension + overshoot (pops, icon lift)
+             --draw   symmetric ease (line & bar draws)
+           Entrances are a blur-to-focus rise: content lifts while
+           resolving from soft-focus to sharp, on a slow expo-out
+           curve. Travel, blur and cascade are driven by custom
+           properties so one keyframe serves many elements. */
+        :root {
+            --drag:   cubic-bezier(0.16, 1, 0.3, 1);
+            --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --draw:   cubic-bezier(0.65, 0, 0.35, 1);
+            --rise:   28px;     /* default entrance travel */
+            --focus:  8px;      /* entrance blur, sharpens to 0 */
+            --stagger: 90ms;    /* base cascade step       */
         }
-        .hero-badge    { animation: fadeUp 0.55s ease 0.10s both; }
-        .hero-h1       { animation: fadeUp 0.60s ease 0.25s both; }
-        .hero-sub      { animation: fadeUp 0.60s ease 0.42s both; }
-        .hero-stats    { animation: fadeUp 0.60s ease 0.57s both; }
-        .hero-actions  { animation: fadeUp 0.60s ease 0.72s both; }
-        .hero-deco-card { animation: fadeUp 0.80s ease 0.90s both; }
 
-        /* Scroll-triggered reveals */
+        /* Single parametric entrance — blur-to-focus rise.
+           Distance via --rise, soft-focus via --focus. */
+        @keyframes rise {
+            from { opacity: 0; transform: translate3d(0, var(--rise), 0); filter: blur(var(--focus)); }
+            to   { opacity: 1; transform: translate3d(0, 0, 0);          filter: blur(0); }
+        }
+        @keyframes lineUp {
+            from { transform: translate3d(0, 110%, 0); }
+            to   { transform: translate3d(0, 0, 0); }
+        }
+        @keyframes drawX {
+            from { transform: scaleX(0); }
+            to   { transform: scaleX(1); }
+        }
+        @keyframes pop {
+            0%, 100% { transform: scale(1); }
+            50%      { transform: scale(1.09); }
+        }
+        @keyframes halo {
+            0%, 100% { opacity: 0;   transform: scale(1); }
+            50%      { opacity: 0.7; transform: scale(1.35); }
+        }
+
+        /* ══ Hero entrance — blur-to-focus rise, GPU-promoted ═ */
+        .hero-badge,
+        .hero-sub,
+        .hero-stats,
+        .hero-actions,
+        .hero-deco-card {
+            will-change: transform, opacity, filter;
+            animation: rise 0.95s var(--drag) both;
+        }
+        .hero-badge     { animation-delay: 0.10s; }
+        .hero-sub       { animation-delay: 0.42s; }
+        .hero-stats     { --rise: 18px; animation-delay: 0.57s; }
+        .hero-actions   { animation-delay: 0.72s; }
+        .hero-deco-card { --rise: 30px; animation-delay: 0.90s; }
+
+        /* ══ Scroll-triggered reveal — blur-to-focus rise ═══
+           Content lifts and resolves from soft-focus to sharp on
+           a slow expo-out curve. The stagger index is assigned
+           per-grid in JS (--reveal-index) so each grid arrives in
+           choreographed sequence. will-change is released the
+           moment the element settles. */
         .reveal {
             opacity: 0;
-            transform: translateY(18px);
-            transition: opacity 0.55s ease, transform 0.55s ease;
+            transform: translate3d(0, var(--rise), 0);
+            filter: blur(var(--focus));
+            transition:
+                opacity   1s var(--drag),
+                transform 1s var(--drag),
+                filter    1s var(--drag);
+            transition-delay: calc(var(--reveal-index, 0) * var(--stagger));
+            will-change: transform, opacity, filter;
         }
-        .reveal.visible        { opacity: 1; transform: translateY(0); }
-        .reveal.reveal-d1      { transition-delay: 0.10s; }
-        .reveal.reveal-d2      { transition-delay: 0.20s; }
-        .reveal.reveal-d3      { transition-delay: 0.30s; }
-        .reveal.reveal-d4      { transition-delay: 0.42s; }
+        .reveal.visible {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+            filter: blur(0);
+            will-change: auto;
+        }
 
         /* Stat values — tabular-nums prevents layout shift during count-up */
         .stat-value { font-variant-numeric: tabular-nums; }
@@ -305,16 +413,11 @@
         }
 
         /* ── Hero report card ────────────────────────────── */
-        .hero-deco-card { will-change: opacity, transform; }
-
-        @keyframes growBar {
-            from { transform: scaleX(0); }
-            to   { transform: scaleX(1); }
-        }
         .report-bar-fill {
             transform-origin: left;
             transform: scaleX(0);
-            animation: growBar 1.4s cubic-bezier(0.16, 1, 0.3, 1) 1.6s both;
+            will-change: transform;
+            animation: drawX 1.4s var(--drag) 1.6s both;
         }
 
         /* ── Dark statement interstitial ─────────────────── */
@@ -365,20 +468,193 @@
         /* ── Sticky CTA ──────────────────────────────────── */
         #sticky-cta {
             opacity: 0;
-            transform: translateY(10px) scale(0.96);
+            transform: translate3d(0, 10px, 0) scale(0.96);
             pointer-events: none;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transition: opacity 0.3s var(--drag), transform 0.3s var(--drag);
             will-change: opacity, transform;
         }
         #sticky-cta.visible {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translate3d(0, 0, 0) scale(1);
             pointer-events: auto;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           ANIMATION POLISH
+           Entrance choreography and hover states. The easing
+           language is the three tokens declared above:
+             var(--drag)   → entrance settle / mass drag
+             var(--spring) → tension + overshoot
+             var(--draw)   → symmetric line & bar draws
+        ═══════════════════════════════════════════════════ */
+
+        /* ── Scroll progress (top of page) ───────────────────
+           Driven by transform: scaleX (composited) rather than
+           width, so per-frame scroll updates never trigger
+           layout. JS sets scaleX(0→1); origin pins it left. */
+        .scroll-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 2px;
+            width: 100%;
+            transform: scaleX(0);
+            transform-origin: left;
+            background: linear-gradient(90deg,
+                rgba(212,175,55,0.55) 0%,
+                #d4af37 50%,
+                rgba(212,175,55,0.55) 100%);
+            z-index: 51;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+            will-change: transform;
+            transition: transform 0.08s linear;
+        }
+
+        /* ── Gold accent bars draw in on reveal ──────────── */
+        .gold-bar {
+            transform-origin: left;
+            transform: scaleX(0);
+            transition: transform 0.9s var(--draw) 0.25s;
+        }
+        .reveal.visible .gold-bar {
+            transform: scaleX(1);
+        }
+
+        /* Eyebrow rides its parent .reveal — no letter-spacing
+           transition (that would reflow text every frame). */
+
+        /* ── Hero H1 cinematic line-by-line reveal ───────── */
+        .hero-h1 { animation: none !important; opacity: 1 !important; }
+        .hero-h1 .line-wrap {
+            display: block;
+            overflow: hidden;
+            padding-bottom: 0.08em; /* prevents descender clipping */
+        }
+        .hero-h1 .line {
+            display: block;
+            transform: translate3d(0, 110%, 0);
+            will-change: transform;
+            animation: lineUp 1.05s var(--drag) both;
+        }
+        .hero-h1 .line-wrap:nth-child(1) .line { animation-delay: 0.35s; }
+        .hero-h1 .line-wrap:nth-child(2) .line { animation-delay: 0.48s; }
+        .hero-h1 .line-wrap:nth-child(3) .line { animation-delay: 0.62s; }
+
+        /* ── Methodology card: top accent + icon lift ────── */
+        /* Top gold accent bar — drawn with scaleX. Its gradient
+           fades to transparent at both ends, so it needs no
+           overflow clipping (which let us drop overflow:hidden
+           and keep the lift shadow on an un-clipped ::after). */
+        .card-hover::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 2px;
+            width: 100%;
+            background: linear-gradient(90deg,
+                rgba(212,175,55,0) 0%,
+                #d4af37 50%,
+                rgba(212,175,55,0) 100%);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.5s var(--draw);
+            pointer-events: none;
+        }
+        .card-hover:hover::before {
+            transform: scaleX(1);
+        }
+        .card-hover .method-icon {
+            transition: transform 0.5s var(--spring);
+            will-change: transform;
+        }
+        .card-hover:hover .method-icon {
+            transform: translate3d(0, -4px, 0) scale(1.06);
+        }
+
+        /* ── Process connector animated drawing ──────────── */
+        @media (min-width: 768px) {
+            .process-grid::before {
+                transform: scaleX(0);
+                transform-origin: left;
+                will-change: transform;
+                transition: transform 1.4s var(--draw) 0.15s;
+            }
+            .process-grid.in-view::before {
+                transform: scaleX(1);
+            }
+        }
+
+        /* ── Process step 4 (gold) breathing halo ──────────
+           A ring on ::after that scales + fades. Pure
+           transform/opacity, so the loop never repaints. */
+        .process-grid .process-step:nth-child(4) .process-step-inner > div:first-child {
+            position: relative;
+        }
+        .process-grid .process-step:nth-child(4) .process-step-inner > div:first-child::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            border: 2px solid rgba(212, 175, 55, 0.5);
+            opacity: 0;
+            will-change: transform, opacity;
+            animation: halo 4.5s ease-in-out 2.5s infinite;
+            pointer-events: none;
+        }
+
+        /* ── Hero report card: cascading line items ───────
+           Reuses the shared `rise` keyframe with a short travel. */
+        .report-rows > div {
+            --rise: 7px;
+            opacity: 0;
+            transform: translate3d(0, var(--rise), 0);
+            animation: rise 0.55s var(--drag) both;
+        }
+        .report-rows > div:nth-child(1) { animation-delay: 1.30s; }
+        .report-rows > div:nth-child(2) { animation-delay: 1.45s; }
+        .report-rows > div:nth-child(3) { animation-delay: 1.60s; }
+        .report-rows > div:nth-child(4) { animation-delay: 1.75s; }
+        .report-rows > div:nth-child(5) { animation-delay: 1.90s; }
+
+        /* ── Counter completion pulse ────────────────────── */
+        .stat-value.counter-complete {
+            animation: pop 0.55s var(--spring);
+        }
+
+        /* ── Gold button: light sheen sweep on hover ─────── */
+        .btn-gold {
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-gold::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                110deg,
+                transparent 30%,
+                rgba(255, 255, 255, 0.42) 50%,
+                transparent 70%
+            );
+            transform: translate3d(-110%, 0, 0);
+            transition: transform 0.85s var(--drag);
+            pointer-events: none;
+        }
+        .btn-gold:hover::after {
+            transform: translate3d(110%, 0, 0);
         }
     </style>
 </head>
 
 <body class="flex flex-col min-h-screen relative selection:bg-brand-navy selection:text-white">
+
+<!-- Skip-to-content link (keyboard accessibility) -->
+<a href="#hero" class="skip-link">Skip to main content</a>
+
+<!-- Scroll progress bar -->
+<div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
 
 <!-- ═══════════════════════════════════════════════════════
      MOBILE NAVIGATION DRAWER
@@ -404,9 +680,9 @@
         <a href="#process"     class="py-3 px-4 text-slate-300 hover:text-brand-gold hover:bg-white/5 rounded-sm transition-colors text-sm font-medium uppercase tracking-wider">Our Process</a>
         <a href="#contact"     class="py-3 px-4 text-slate-300 hover:text-brand-gold hover:bg-white/5 rounded-sm transition-colors text-sm font-medium uppercase tracking-wider">Contact</a>
         <div class="pt-4 mt-4 border-t border-white/10">
-            <a href="mailto:bradley@frictionlessoperations.com"
+            <a href="mailto:audit@frictionlessoperations.com"
                class="block text-xs text-slate-500 hover:text-slate-400 transition-colors px-4 py-2 truncate">
-                bradley@frictionlessoperations.com
+                audit@frictionlessoperations.com
             </a>
         </div>
     </nav>
@@ -432,8 +708,8 @@
             <a href="#methodology" class="nav-link">Methodology</a>
             <a href="#process"     class="nav-link">Our Process</a>
             <a href="#contact"     class="nav-link">Contact</a>
-            <a href="mailto:bradley@frictionlessoperations.com" class="nav-email">
-                bradley@frictionlessoperations.com
+            <a href="mailto:audit@frictionlessoperations.com" class="nav-email">
+                audit@frictionlessoperations.com
             </a>
             <a href="#contact" class="nav-cta">Request Audit</a>
         </div>
@@ -465,13 +741,14 @@
                 </div>
 
                 <h1 class="hero-h1 font-serif text-5xl md:text-6xl lg:text-7xl mb-6 leading-[1.05]">
-                    Algorithmic<br>Auditing.
-                    <span class="block text-brand-gold italic font-normal mt-1">Absolute Recovery.</span>
+                    <span class="line-wrap"><span class="line">Algorithmic</span></span>
+                    <span class="line-wrap"><span class="line">Auditing.</span></span>
+                    <span class="line-wrap mt-1"><span class="line text-brand-gold italic font-normal">Maximum Recovery.</span></span>
                 </h1>
 
                 <p class="hero-sub text-lg md:text-xl mb-12 max-w-xl leading-relaxed text-slate-300 font-light">
                     Most enterprise freight bills contain systematic billing errors your AP software
-                    is not designed to catch. Our profit recovery services recovers those overcharges;
+                    is not designed to catch. Our capital recovery service recovers those overcharges
                     at zero upfront cost and zero disruption to your operations.
                 </p>
 
@@ -594,7 +871,7 @@
                         </div>
                         <div class="flex justify-between mt-1.5">
                             <span class="text-[9px] text-slate-600">Contracted basis</span>
-                            <span class="text-[9px] text-brand-gold/60">78% overcharge rate</span>
+                            <span class="text-[9px] text-brand-gold/60">78% of lines flagged</span>
                         </div>
                     </div>
                 </div>
@@ -612,8 +889,8 @@
             <div class="max-w-2xl reveal">
                 <span class="section-eyebrow mb-4">Structural Inefficiencies</span>
                 <h2 class="font-serif text-3xl md:text-4xl text-brand-navy leading-tight">
-                    Carrier contracts are complex by design,<br class="hidden md:block">
-                    leading to systemic capital leakage.
+                    Carrier contracts are inherently complex,<br class="hidden md:block">
+                    resulting in systemic capital leakage.
                 </h2>
             </div>
         </div>
@@ -634,13 +911,13 @@
                 <div class="text-brand-gold font-serif text-3xl mb-3 leading-none select-none">01.</div>
                 <h3 class="text-xl mb-4 text-brand-navy font-semibold">Contractual Drift</h3>
                 <p class="text-brand-gray leading-relaxed text-sm">
-                    Negotiated base rates act merely as a theoretical baseline. Complex carrier matrices
+                    Negotiated base rates serve as a theoretical baseline. Complex carrier matrices
                     frequently diverge from executed contracts, applying uncontracted lanes, expired tariffs,
                     or failing to honor established volume tiers.
                 </p>
             </div>
 
-            <!-- Card 2: Accessorial Hemorrhage -->
+            <!-- Card 2: Accessorial Leakage -->
             <div class="card-hover reveal reveal-d2 bg-white p-10 shadow-sm border border-slate-100 rounded-sm">
                 <svg class="method-icon" viewBox="0 0 38 38" fill="none" stroke="currentColor"
                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -650,11 +927,11 @@
                     <circle cx="22" cy="36.5" r="0.8" fill="currentColor" stroke="none" opacity="0.3"/>
                 </svg>
                 <div class="text-brand-gold font-serif text-3xl mb-3 leading-none select-none">02.</div>
-                <h3 class="text-xl mb-4 text-brand-navy font-semibold">Accessorial Hemorrhage</h3>
+                <h3 class="text-xl mb-4 text-brand-navy font-semibold">Accessorial Leakage</h3>
                 <p class="text-brand-gray leading-relaxed text-sm">
-                    The accessorial schedule represents the primary extraction vector. Carriers deploy
-                    obfuscated fuel schedule mismatches and duplicate terminal handling charges that
-                    routinely bypass standard AP approval tolerances.
+                    The accessorial schedule is the leading source of billing variance. Fuel schedule
+                    mismatches and duplicate terminal handling charges routinely fall outside standard
+                    AP review thresholds.
                 </p>
             </div>
 
@@ -674,9 +951,9 @@
                 <div class="text-brand-gold font-serif text-3xl mb-3 leading-none select-none">03.</div>
                 <h3 class="text-xl mb-4 text-brand-navy font-semibold">The AP Dilemma</h3>
                 <p class="text-brand-gray leading-relaxed text-sm">
-                    Standard internal workflows prioritize operational speed over true accuracy.
+                    Standard internal workflows prioritize operational speed over forensic accuracy.
                     Without bandwidth for line-item historical reconciliation against multi-tiered tariffs,
-                    finance automates capital hemorrhage.
+                    finance teams automate capital leakage.
                 </p>
             </div>
         </div>
@@ -698,7 +975,7 @@
                     <div class="mt-8 hidden lg:block space-y-3">
                         <div class="flex items-center gap-2.5 text-xs text-slate-500">
                             <span class="w-1.5 h-1.5 rounded-full bg-brand-gold/60 flex-shrink-0"></span>
-                            Tariff obfuscation
+                            Tariff complexity
                         </div>
                         <div class="flex items-center gap-2.5 text-xs text-slate-500">
                             <span class="w-1.5 h-1.5 rounded-full bg-brand-gold/60 flex-shrink-0"></span>
@@ -723,9 +1000,9 @@
                         is whether you recover it."</span>
                     </blockquote>
                     <p class="text-slate-400 text-base leading-relaxed max-w-2xl mb-8">
-                        Standard AP workflows are engineered for throughput, not depth. The structural
+                        Standard AP workflows are engineered for throughput, not rigor. The structural
                         complexity of carrier billing — stacked tariff schedules, rolling accessorial tables,
-                        multi-origin rate matrices — is designed to exceed standard approval tolerances, leaving
+                        multi-origin rate matrices — routinely exceeds standard approval tolerances, leaving
                         systematic overcharges invisible until a purpose-built audit isolates them.
                     </p>
                     <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -786,7 +1063,7 @@
                     <h3 class="text-brand-navy font-semibold mb-3 text-base">Reconciliation</h3>
                     <p class="text-brand-gray text-sm leading-relaxed">
                         Our algorithms cross-reference every invoice line against your executed carrier
-                        contracts, isolating every billing variance and overcharge.
+                        contracts, isolating billing variances and overcharges.
                     </p>
                 </div>
             </div>
@@ -837,7 +1114,7 @@
                 <h4 class="text-white font-serif text-lg mb-2">Results-Only Compensation</h4>
                 <p class="text-slate-400 text-sm leading-relaxed">
                     Our 30% fee applies only to capital we actually recover. If the audit yields
-                    nothing, you pay nothing. Our interests are structurally identical to yours.
+                    nothing, you pay nothing. Our interests are structurally aligned with yours.
                 </p>
             </div>
         </div>
@@ -854,7 +1131,7 @@
             <span class="section-eyebrow mb-4">Confidential Intake</span>
             <h2 class="font-serif text-3xl text-brand-navy mb-4">Request a Confidential Audit Review</h2>
             <p class="text-brand-gray max-w-md mx-auto text-sm">
-                Submit your operational parameters below. We provide a secure Mutual NDA prior to
+                Submit your information below. We provide a secure Mutual NDA prior to
                 discussing any specific carrier data.
             </p>
         </div>
@@ -870,7 +1147,7 @@
             <h3 class="text-brand-navy font-serif text-2xl mb-2">Request Received</h3>
             <p class="text-brand-gray">
                 Your inquiry has been securely logged. The Managing Director will contact you
-                shortly to execute preliminary NDAs.
+                shortly to arrange a Mutual NDA.
             </p>
         </div>
 
@@ -878,7 +1155,7 @@
         <div id="fs-error"
              class="hidden max-w-2xl mx-auto bg-red-50 p-4 border border-red-200 text-red-700 text-sm mb-6 rounded-sm">
             Something went wrong. Please verify your information and try again, or
-            <a href="mailto:bradley@frictionlessoperations.com" class="underline font-medium">email us directly</a>.
+            <a href="mailto:audit@frictionlessoperations.com" class="underline font-medium">email us directly</a>.
         </div>
 
         <!-- Two-column contact grid -->
@@ -894,7 +1171,7 @@
                                 Why Qualified<br>Companies Act Now
                             </h3>
                             <p class="text-slate-400 text-sm leading-relaxed mb-8">
-                                Carrier overbillings compound with each billing cycle. The lookback window
+                                Carrier overcharges compound with each billing cycle. The lookback window
                                 is finite. Recoverable capital does not wait indefinitely.
                             </p>
 
@@ -953,9 +1230,9 @@
                         <!-- Direct email at bottom -->
                         <div class="pt-6 border-t border-white/8">
                             <div class="text-[10px] text-slate-600 uppercase tracking-widest mb-2">Direct Line</div>
-                            <a href="mailto:bradley@frictionlessoperations.com"
+                            <a href="mailto:audit@frictionlessoperations.com"
                                class="text-slate-400 hover:text-brand-gold transition-colors text-sm break-all leading-relaxed">
-                                bradley@frictionlessoperations.com
+                                audit@frictionlessoperations.com
                             </a>
                         </div>
                     </aside>
@@ -1065,17 +1342,21 @@
                     Frictionless <span class="font-light text-slate-500">Operations</span>
                 </span>
                 <p class="text-sm mt-2 max-w-xs leading-relaxed">
-                    Data-driven fiduciary strategy for enterprise freight spend.
+                    Data-driven independent advisory for enterprise freight spend.
                 </p>
-                <a href="mailto:bradley@frictionlessoperations.com"
+                <a href="mailto:audit@frictionlessoperations.com"
                    class="mt-3 block text-sm text-slate-500 hover:text-brand-gold transition-colors">
-                    bradley@frictionlessoperations.com
+                    audit@frictionlessoperations.com
                 </a>
             </div>
             <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <button type="button" id="open-privacy-btn"
                         class="hover:text-white transition-colors cursor-pointer">
                     Privacy Policy
+                </button>
+                <button type="button" id="open-accessibility-btn"
+                        class="hover:text-white transition-colors cursor-pointer">
+                    Accessibility
                 </button>
                 <button type="button" id="open-tos-btn"
                         class="hover:text-white transition-colors cursor-pointer">
@@ -1134,18 +1415,49 @@
                 <li>Communicate audit findings, variance reports, and operational updates.</li>
             </ul>
             <h4 class="text-base font-semibold text-brand-navy">3. Data Security &amp; Confidentiality</h4>
-            <p>We operate as a fiduciary proxy. Client data is treated with the highest degree of confidentiality.
-               We implement enterprise-grade security measures to protect against unauthorized access, alteration,
-               disclosure, or destruction of your corporate data. We do not sell, rent, or trade your operational
-               data to third parties under any circumstances.</p>
+            <p>We operate as a third-party proxy. Client data is treated with the highest degree of confidentiality.
+               We implement appropriate technical and organizational security measures to protect against unauthorized
+               access, alteration, disclosure, or destruction of your corporate data. We do not sell, rent, or trade
+               your operational data to third parties under any circumstances.</p>
             <h4 class="text-base font-semibold text-brand-navy">4. Data Sharing</h4>
             <p>Information is only shared with third parties (specifically, your designated carriers) to the exact
                extent necessary to file and substantiate billing disputes on your behalf, governed by your explicit
                Letter of Authorization.</p>
-            <h4 class="text-base font-semibold text-brand-navy">5. Contact Us</h4>
+            <h4 class="text-base font-semibold text-brand-navy">5. Service Providers</h4>
+            <p>We rely on a limited number of third-party service providers to operate this website and process
+               inquiries. These providers act as data processors on our behalf and are contractually limited to
+               processing data strictly for the purposes for which we engage them. Categories include:</p>
+            <ul class="list-disc pl-5 space-y-2">
+                <li><strong>Form Processing:</strong> Inquiries submitted via the intake form on this website are
+                    transmitted through Formspree (Formspree, Inc.) for secure routing to our team. Formspree
+                    processes only the data you submit and does not sell or share it.</li>
+                <li><strong>Web Infrastructure:</strong> Standard hosting, content delivery, and font services
+                    used to render this website.</li>
+            </ul>
+            <h4 class="text-base font-semibold text-brand-navy">6. Cookies and Tracking Technologies</h4>
+            <p>This website does not deploy first-party analytics, advertising trackers, or social-media pixels.
+               The third-party services referenced above (notably web font and content-delivery providers) may
+               set cookies or receive connection-level data (such as your IP address and user agent) when the
+               page loads, as a technical necessity for delivering the requested resources. We do not control
+               these third-party cookies and recommend reviewing the relevant providers' privacy notices for
+               details. You may disable cookies in your browser at any time; doing so will not affect your
+               ability to submit an inquiry through our intake form.</p>
+            <h4 class="text-base font-semibold text-brand-navy">7. Data Retention</h4>
+            <p>We retain inquiry data for the duration of any active or prospective business relationship and for
+               a reasonable period thereafter to meet legal, accounting, or operational requirements. Engagement
+               data covered by an executed MSA is retained per the terms of that agreement. You may request
+               deletion of your data at any time, subject to legal retention obligations, by contacting us at
+               the address below.</p>
+            <h4 class="text-base font-semibold text-brand-navy">8. Your Rights</h4>
+            <p>Depending on your state of residence, you may have rights to access, correct, delete, or obtain a
+               copy of the personal information we hold about you, and to opt out of the sale or sharing of that
+               information. We do not sell personal information. To exercise any of these rights, contact us at
+               the address below; we will respond within the timeframe required by applicable law. We will not
+               discriminate against you for exercising your rights.</p>
+            <h4 class="text-base font-semibold text-brand-navy">9. Contact Us</h4>
             <p>If you have questions about this Privacy Policy, please contact:
-               <a href="mailto:bradley@frictionlessoperations.com"
-                  class="text-brand-gold hover:underline">bradley@frictionlessoperations.com</a></p>
+               <a href="mailto:audit@frictionlessoperations.com"
+                  class="text-brand-gold hover:underline">audit@frictionlessoperations.com</a></p>
         </div>
     </div>
 </div>
@@ -1175,11 +1487,14 @@
             <h4 class="text-base font-semibold text-brand-navy">1. Scope of Website Services</h4>
             <p>The content provided on this website is for informational purposes, detailing our methodology for
                post-payment freight auditing and capital recovery. Submitting an inquiry via our intake form does
-               not establish a formal fiduciary or agent relationship until binding agreements are executed.</p>
+               not establish a formal advisory or agent relationship until binding agreements are executed.</p>
             <h4 class="text-base font-semibold text-brand-navy">2. The Contingency Audit Model</h4>
             <p>Our core service operates on a pure contingency basis. Details regarding our 30% performance fee,
                historical lookback periods, and specific operational boundaries will be explicitly defined in the MSA.
-               We make no absolute guarantees of capital recovery prior to evaluation of your carrier matrices.</p>
+               Lookback periods available to a given client are limited by applicable carrier agreement terms,
+               carrier dispute windows, and statutes of limitation, and may be shorter than the 1–3 year range
+               described in general marketing materials. We make no guarantees of specific recovery outcomes;
+               actual results depend on the nature and volume of billing variances present in your carrier data.</p>
             <h4 class="text-base font-semibold text-brand-navy">3. Client Obligations</h4>
             <p>By requesting an audit review, you attest that you are an authorized representative of your company.
                To successfully execute our service following an MSA, clients are obligated to provide a signed Letter
@@ -1192,6 +1507,70 @@
             <p>In no event shall Frictionless Operations LLC be liable for any indirect, consequential, or incidental
                damages arising out of your use of this website. Our liability regarding audit execution is strictly
                limited to the terms negotiated within the formal MSA.</p>
+            <h4 class="text-base font-semibold text-brand-navy">6. Governing Law &amp; Jurisdiction</h4>
+            <p>These Terms of Service, and any dispute arising out of or relating to your use of this website, are
+               governed by and construed in accordance with the laws of the State of [STATE OF INCORPORATION],
+               without regard to its conflict-of-law principles. You agree that any action at law or in equity
+               arising out of or relating to these Terms shall be filed only in the state or federal courts located
+               in [STATE OF INCORPORATION], and you consent to the personal jurisdiction of those courts. If any
+               provision of these Terms is held invalid or unenforceable, the remaining provisions will continue
+               in full force and effect.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Accessibility Statement
+═══════════════════════════════════════════════════════ -->
+<div id="accessibility-modal" role="dialog" aria-modal="true" aria-labelledby="accessibility-modal-title"
+     class="fixed inset-0 z-[100] hidden items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
+    <div class="modal-backdrop absolute inset-0 bg-brand-navy/80 backdrop-blur-sm"></div>
+    <div class="modal-content bg-white w-full max-w-3xl max-h-[85vh] rounded-sm shadow-2xl relative flex flex-col
+                transform scale-95 transition-transform duration-300">
+        <div class="flex justify-between items-center p-6 border-b border-slate-200 flex-shrink-0">
+            <h3 id="accessibility-modal-title" class="font-serif text-2xl text-brand-navy">Accessibility Statement</h3>
+            <button type="button" class="modal-close-btn text-slate-400 hover:text-brand-navy transition-colors"
+                    data-modal="accessibility-modal" aria-label="Close Accessibility Statement">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="p-6 md:p-8 overflow-y-auto text-sm text-slate-600 space-y-6 leading-relaxed">
+            <p><strong>Last Reviewed: June 1, 2026</strong></p>
+            <h4 class="text-base font-semibold text-brand-navy">Our Commitment</h4>
+            <p>Frictionless Operations LLC is committed to ensuring this website is accessible to and usable by
+               the broadest possible audience, including people with disabilities. We design and develop this
+               site to align with the Web Content Accessibility Guidelines (WCAG) 2.1, Level AA, published by
+               the World Wide Web Consortium (W3C).</p>
+            <h4 class="text-base font-semibold text-brand-navy">Measures Taken</h4>
+            <p>This website incorporates the following accessibility features:</p>
+            <ul class="list-disc pl-5 space-y-2">
+                <li>Semantic HTML structure and ARIA labeling on interactive components, including modal dialogs
+                    and the mobile navigation menu.</li>
+                <li>Visible keyboard focus indicators throughout the site.</li>
+                <li>Full keyboard navigation support, including focus trapping inside modal dialogs.</li>
+                <li>A skip-to-content link that allows keyboard users to bypass the fixed navigation.</li>
+                <li>Respect for the user's operating-system-level reduced-motion preference; entrance animations
+                    and scroll-triggered reveals are disabled for users who set this preference.</li>
+                <li>Sufficient color contrast on body text, headings, and interactive elements.</li>
+                <li>Form labels properly associated with input fields, with inline error messaging communicated
+                    to assistive technologies via aria-invalid attributes.</li>
+            </ul>
+            <h4 class="text-base font-semibold text-brand-navy">Compatibility</h4>
+            <p>This site is designed to be compatible with current versions of major browsers (Chrome, Firefox,
+               Safari, Edge) and major assistive technologies (JAWS, NVDA, VoiceOver, TalkBack). Compatibility
+               with older browser or assistive technology versions may be limited.</p>
+            <h4 class="text-base font-semibold text-brand-navy">Ongoing Commitment</h4>
+            <p>We treat accessibility as an ongoing commitment rather than a one-time achievement. If you
+               encounter content or functionality that is not accessible to you, we treat it as a defect rather
+               than an edge case, and will work to address it.</p>
+            <h4 class="text-base font-semibold text-brand-navy">Contact for Accessibility Issues</h4>
+            <p>If you encounter an accessibility barrier on this website, would like to request information in
+               an alternative format, or have suggestions for improvement, please contact:
+               <a href="mailto:audit@frictionlessoperations.com"
+                  class="text-brand-gold hover:underline">audit@frictionlessoperations.com</a>.
+               We will respond promptly and work to provide the information or functionality you need.</p>
         </div>
     </div>
 </div>
@@ -1252,7 +1631,7 @@ function closeModal(id) {
     if (_lastFocus) { _lastFocus.focus(); _lastFocus = null; }
 }
 
-const MODAL_IDS = ['privacy-modal', 'tos-modal'];
+const MODAL_IDS = ['privacy-modal', 'tos-modal', 'accessibility-modal'];
 
 document.addEventListener('keydown', e => {
     const openModalId = MODAL_IDS.find(id => {
@@ -1291,6 +1670,7 @@ document.querySelectorAll('.modal-close-btn').forEach(btn => {
 
 document.getElementById('open-privacy-btn').addEventListener('click', () => openModal('privacy-modal'));
 document.getElementById('open-tos-btn').addEventListener('click',     () => openModal('tos-modal'));
+document.getElementById('open-accessibility-btn').addEventListener('click', () => openModal('accessibility-modal'));
 
 /* ─────────────────────────────────────────────────────
    MOBILE MENU
@@ -1333,6 +1713,36 @@ window.addEventListener('scroll', updateNav, { passive: true });
 updateNav();
 
 /* ─────────────────────────────────────────────────────
+   SCROLL PROGRESS BAR
+   Drives the top bar via transform: scaleX (composited).
+   rAF-throttled so multiple scroll events collapse into
+   one paint-free transform update per frame.
+───────────────────────────────────────────────────── */
+const progressBar = document.getElementById('scroll-progress');
+
+if (progressBar) {
+    let progressQueued = false;
+
+    function renderProgress() {
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        const ratio = max > 0 ? Math.min(doc.scrollTop / max, 1) : 0;
+        progressBar.style.transform = 'scaleX(' + ratio + ')';
+        progressQueued = false;
+    }
+
+    window.addEventListener('scroll', () => {
+        if (!progressQueued) {
+            progressQueued = true;
+            requestAnimationFrame(renderProgress);
+        }
+    }, { passive: true });
+
+    window.addEventListener('resize', renderProgress, { passive: true });
+    renderProgress();
+}
+
+/* ─────────────────────────────────────────────────────
    STICKY CTA
 ───────────────────────────────────────────────────── */
 const stickyCta = document.getElementById('sticky-cta');
@@ -1348,18 +1758,53 @@ if (stickyCta && heroEl) {
 }
 
 /* ─────────────────────────────────────────────────────
-   INTERSECTION OBSERVER
+   REVEAL CASCADE
+   Each .reveal element is assigned a --reveal-index equal
+   to its position among its reveal siblings, so every grid
+   runs its OWN staggered "load-bearing" sequence (cards
+   1·2·3, process steps 1·2·3·4) instead of one global
+   ramp. The CSS turns that index into transition-delay.
+   rootMargin trips the cascade just before the row fully
+   enters, keeping motion ahead of the eye.
 ───────────────────────────────────────────────────── */
+document.querySelectorAll('.reveal').forEach(el => {
+    const group = [...el.parentElement.children].filter(c => c.classList.contains('reveal'));
+    el.style.setProperty('--reveal-index', Math.max(group.indexOf(el), 0));
+});
+
 const revealObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            revealObserver.unobserve(entry.target);
-        }
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        el.classList.add('visible');
+        revealObserver.unobserve(el);
+
+        /* Once the blur has resolved, remove the filter entirely so
+           resting text is pixel-crisp and no idle layer is held.
+           Guard on el itself + the filter property so a child's
+           transition (gold-bar scaleX) can't fire it early. */
+        el.addEventListener('transitionend', function done(ev) {
+            if (ev.target !== el || ev.propertyName !== 'filter') return;
+            el.style.filter = 'none';
+            el.removeEventListener('transitionend', done);
+        });
     });
-}, { threshold: 0.12 });
+}, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
 
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+/* Process connector line draws across once the grid enters view. */
+const processGrid = document.querySelector('.process-grid');
+if (processGrid) {
+    const processObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add('in-view');
+            processObserver.unobserve(entry.target);
+        });
+    }, { threshold: 0.2 });
+    processObserver.observe(processGrid);
+}
 
 /* ─────────────────────────────────────────────────────
    COUNTER ANIMATION
@@ -1370,7 +1815,16 @@ function animateCounter(el, target, prefix, suffix, duration) {
         const t      = Math.min((now - start) / duration, 1);
         const eased  = 1 - Math.pow(1 - t, 3);
         el.textContent = prefix + Math.round(eased * target) + suffix;
-        if (t < 1) requestAnimationFrame(tick);
+        if (t < 1) {
+            requestAnimationFrame(tick);
+        } else {
+            /* Composited scale pop on settle; remove the class
+               afterward so the element holds no idle animation. */
+            el.classList.add('counter-complete');
+            el.addEventListener('animationend', () => {
+                el.classList.remove('counter-complete');
+            }, { once: true });
+        }
     })(start);
 }
 
