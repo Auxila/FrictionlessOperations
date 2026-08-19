@@ -4,12 +4,12 @@
  * ========================================================================= */
 
 import React, { useState } from 'react';
-import { AlertTriangle, Download, FileText, PenLine } from 'lucide-react';
+import { AlertTriangle, FileDown, PenLine, Table2 } from 'lucide-react';
 
 import { computeStats, deficitReport, formatMoney } from '../store.js';
 import { Modal, btn, input } from '../ui.jsx';
 
-export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV, onExportReport, exporting }) {
+export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV, onPrintPDF, exporting }) {
   const report = deficitReport(property);
   const stats = computeStats(property);
   const [name, setName] = useState(property.signedOffBy || auditor || '');
@@ -108,27 +108,33 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           </span>
         </label>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => signAndExport(onExportReport)}
-            disabled={exporting}
-            className={`${btn.primary} flex items-center justify-center gap-2`}
-          >
-            <FileText size={16} aria-hidden="true" />
-            {exporting ? 'Building…' : 'Report'}
-          </button>
-          <button
-            type="button"
-            onClick={() => signAndExport(onExportCSV)}
-            className={`${btn.ghost} flex flex-1 items-center justify-center gap-2`}
-          >
-            <Download size={16} aria-hidden="true" />
-            CSV
-          </button>
-        </div>
-        <p className="text-center font-mono text-[10px] uppercase leading-relaxed tracking-[0.1em] text-slate-600">
-          Report is a printable page · CSV is the spreadsheet form
+        {/* PDF first: it is the only format that opens the same way on every
+            phone and desktop, needs no spreadsheet app, and cannot be nudged
+            out of shape by whoever opens it. */}
+        <button
+          type="button"
+          onClick={() => signAndExport(onPrintPDF)}
+          disabled={exporting}
+          className={`${btn.primary} flex w-full items-center justify-center gap-2`}
+        >
+          <FileDown size={16} aria-hidden="true" />
+          {exporting ? 'Preparing…' : 'Save as PDF'}
+        </button>
+        <p className="text-center text-[11px] leading-relaxed text-slate-500">
+          Opens your print dialog — choose <span className="text-slate-300">Save as PDF</span>,
+          then attach it to an email. This is the one to send.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => signAndExport(onExportCSV)}
+          className={`${btn.ghost} flex w-full items-center justify-center gap-2`}
+        >
+          <Table2 size={16} aria-hidden="true" />
+          Spreadsheet (CSV)
+        </button>
+        <p className="text-center text-[11px] leading-relaxed text-slate-500">
+          For your own records or anyone who wants to sort and filter it.
         </p>
       </div>
     </Modal>

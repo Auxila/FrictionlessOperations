@@ -16,7 +16,8 @@ import {
   downloadCSVAll, downloadText, getItem, isBlank, loadState, makeProperty, parseBackup,
   phaseOf, probeStorage, saveState, statusFromCount,
 } from './store.js';
-import { buildReport, reportFilename } from './report.js';
+import { buildReport } from './report.js';
+import { printDocument } from './print.js';
 import { ConfirmPhrase, Modal, btn, input } from './ui.jsx';
 import { Sector } from './components/Sector.jsx';
 import { CopyCountsSheet } from './components/CopyCountsSheet.jsx';
@@ -280,11 +281,17 @@ function App() {
     flash(`Extracted ${state.properties.length} properties → CSV`);
   };
 
-  const exportReport = (signedBy) => {
-    const target = signedProperty(signedBy);
-    downloadText(buildReport(target, report), reportFilename(target), 'text/html');
-    setModal(null);
-    flash(`Report built — ${report.count} finding${report.count === 1 ? '' : 's'}`);
+  const printPDF = async (signedBy) => {
+    setExporting(true);
+    try {
+      await printDocument(buildReport(signedProperty(signedBy), report));
+      setModal(null);
+      flash('Print dialog opened — choose “Save as PDF”');
+    } catch {
+      flash('Could not open the print dialog');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const exportBackup = () => {
@@ -638,7 +645,7 @@ function App() {
           onClose={() => setModal(null)}
           onSignOff={signOff}
           onExportCSV={exportCSV}
-          onExportReport={exportReport}
+          onPrintPDF={printPDF}
         />
       )}
 

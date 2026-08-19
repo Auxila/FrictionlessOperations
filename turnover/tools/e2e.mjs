@@ -302,9 +302,16 @@ check('no page errors overall', errors.length === 0, errors.slice(0, 3).join(' /
 console.log('\npar levels + audit ergonomics');
 {
   const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, acceptDownloads: true });
+  /* Stub print() in every frame so the suite can assert the dialog was reached
+     without a real one blocking the run. */
+  await c.addInitScript(() => {
+    window.__printed = 0;
+    window.print = () => { window.__printed += 1; };
+  });
   const pg = await c.newPage();
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
+  pg.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   await pg.goto(BASE, { waitUntil: 'networkidle' });
   await pg.waitForTimeout(300);
 
@@ -407,21 +414,39 @@ console.log('\npar levels + audit ergonomics');
   check('findings sheet counts units short', (await pg.getByText('Units short').count()) === 1);
   await pg.fill('#signoff-name', 'J. Rivera');
   await pg.screenshot({ path: SHOTS + '/13-findings.png' });
-  const rep = await Promise.all([
-    pg.waitForEvent('download', { timeout: 15000 }),
-    pg.getByRole('button', { name: /^Report/ }).click(),
-  ]).then((r) => r[0]).catch(() => null);
-  check('report downloads', !!rep, rep ? await rep.suggestedFilename() : 'no download');
-  if (rep) {
-    const html = readFileSync(await rep.path(), 'utf8');
+
+  /* The report prints from a same-origin iframe, which INHERITS this page's
+     CSP. Assert it is actually styled, not merely present — an unhashed
+     stylesheet is refused silently and the PDF comes out as naked text. */
+  await pg.getByRole('button', { name: /Save as PDF/ }).click();
+  await pg.waitForTimeout(1200);
+  const frame = pg.frames()[1];
+  check('print preview is created', Boolean(frame));
+  if (frame) {
+    check('preview titles itself for the Save-as-PDF filename',
+          /^Turnover Report - /.test(await frame.title()), await frame.title());
+    check('print() was reached', (await frame.evaluate(() => window.__printed)) === 1);
+    const body = await frame.evaluate(() => document.body.innerText);
     check('report states the shortfall without anyone typing it',
-          html.includes('Short 7') && html.includes('counted 23 of 30'),
-          (/Short \d+ — counted \d+ of \d+/.exec(html) || ['not found'])[0]);
+          body.includes('Short 7') && body.includes('counted 23 of 30'),
+          (/Short \d+ — counted \d+ of \d+/.exec(body) || ['not found'])[0]);
     check('report carries the typed finding and the claim',
-          html.includes('Firebox rusted through') && html.includes('$240.00'));
-    check('report is signed', html.includes('J. Rivera'));
-    check('report is self-contained', !/<(script|link|iframe|img)\b/i.test(html));
+          body.includes('Firebox rusted through') && body.includes('$240.00'));
+    check('report is signed', body.includes('J. Rivera'));
+    const styles = await frame.evaluate(() => ({
+      h1: getComputedStyle(document.querySelector('h1')).fontSize,
+      finding: getComputedStyle(document.querySelector('.finding')).backgroundColor,
+      sheet: getComputedStyle(document.querySelector('.sheet')).backgroundColor,
+    }));
+    check('report stylesheet survives the page CSP',
+          styles.h1 === '22px' && styles.finding === 'rgb(254, 242, 242)',
+          JSON.stringify(styles));
+    check('report references nothing external',
+          await frame.evaluate(() =>
+            !document.querySelector('script, link[rel=stylesheet], iframe, img')));
   }
+  check('print reports success to the operative',
+        (await pg.locator('[role=status]').innerText()).includes('SAVE AS PDF'));
 
   /* --- CSV carries the count columns --- */
   const csvDl = await Promise.all([

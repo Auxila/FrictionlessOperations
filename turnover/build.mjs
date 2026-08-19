@@ -45,12 +45,17 @@ execFileSync(
 const css = readFileSync(cssPath, 'utf8');
 rmSync(tmp, { recursive: true, force: true });
 
+/* 2b — the evidence report prints from a same-origin iframe, which inherits
+ *      this page's CSP. Its stylesheet therefore needs a hash here too, or the
+ *      PDF comes out as unstyled plain text with no error the user can see. */
+const { REPORT_STYLES } = await import('./src/report.js');
+
 /* 3 — inline into the shell. Function replacements keep `$&`-style sequences
  *     inside the bundle from being interpreted as replacement patterns. ---- */
 const csp = [
   "default-src 'self'",
   `script-src 'sha256-${sha256(js)}'`,
-  `style-src 'sha256-${sha256(css)}'`,
+  `style-src 'sha256-${sha256(css)}' 'sha256-${sha256(REPORT_STYLES)}'`,
   "img-src 'self' data:",
   "connect-src 'self'",
   "worker-src 'self'",

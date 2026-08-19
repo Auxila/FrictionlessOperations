@@ -23,7 +23,8 @@ with the service worker, the console boots and runs with the network fully down.
 | `src/inventory.js` | The master checklist — 69 assets across 12 spatial sectors |
 | `tools/verify-checklist.mjs` | Asserts the checklist still matches the source document |
 | `src/store.js` | Persistence, counts, derived metrics, CSV, backup format |
-| `src/report.js` | Self-contained printable report |
+| `src/report.js` | The printable report (its stylesheet is CSP-hashed by the build) |
+| `src/print.js` | Renders the report into an off-screen iframe and prints it |
 | `src/app.jsx` | App shell, state, exports |
 | `src/ui.jsx` | Modal / button / field primitives |
 | `src/components/` | AssetRow, Sector, and the four sheets |
@@ -77,8 +78,39 @@ Only the expected quantities travel — targets keep their own counts and audit
 state.
 
 **Findings** (bottom bar) is the deliverable end: every deficit in one screen,
-the units short, the summed replacement value, a sign-off field, and two
-exports — a printable HTML report and the CSV. Signing puts your name on both.
+the units short, the summed replacement value, a sign-off field, and the two
+exports. Signing puts your name on both.
+
+## What to send, and why
+
+**PDF is the one you send a person.** Save as PDF opens the print dialog with
+the report already laid out; pick “Save as PDF” and attach the result. It opens
+identically on any phone or desktop with nothing installed, cannot be nudged
+out of shape by whoever opens it, and reads top-down: the unit, the date, the
+totals, the findings in plain English, then the full inventory.
+
+**CSV is for machines and spreadsheets, not for readers.** Sending one to a
+non-technical person invites a specific set of failures: Excel silently rewrites
+values that look like dates, drops leading zeros from serial numbers, and on any
+locale that uses the comma as a decimal separator it ignores the delimiter and
+dumps all sixteen columns into column A. On a phone many mail clients will not
+preview it at all. It is the right format for importing into another system and
+the wrong one for a manager's inbox.
+
+### How printing works
+
+No PDF library is bundled — one would cost ~400 KB and produce worse typography
+than the platform gives away free. `src/print.js` renders the report into an
+off-screen, same-origin iframe and calls the browser's own print engine. Every
+target can save that to PDF: Windows ships “Microsoft Print to PDF”, macOS and
+iOS have PDF in the print sheet, Android Chrome has “Save as PDF”.
+
+The iframe is off-screen rather than `display:none`, because an unlaid-out
+document prints blank. It uses `srcdoc`, which **inherits this page's CSP** —
+so the build hashes the report's stylesheet into `style-src` alongside the app's
+own. Without that hash the stylesheet is refused silently and the PDF comes out
+as unstyled text while the app still reports success; there is a test asserting
+the preview's computed styles, not merely its content.
 
 ## Working through 69 assets
 

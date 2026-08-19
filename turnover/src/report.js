@@ -10,16 +10,101 @@
 import { SECTORS } from './inventory.js';
 import { DEFICIT, VERIFIED, computeStats, formatMoney, getItem } from './store.js';
 
+/* Exported so build.mjs can hash it into the page's `style-src`. The print
+ * preview runs in a same-origin iframe, which inherits this page's CSP — an
+ * unhashed <style> there is silently refused and the PDF prints unstyled. */
+export const REPORT_STYLES = `
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:#f1f5f9; color:#0f172a;
+         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .sheet { max-width:820px; margin:0 auto; background:#fff; border:1px solid #cbd5e1;
+           border-radius:10px; padding:32px; }
+  h1 { margin:0 0 4px; font-size:22px; letter-spacing:-0.01em; }
+  .sub { margin:0 0 24px; color:#64748b; font-size:13px;
+         font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+         text-transform:uppercase; letter-spacing:.09em; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:28px; }
+  .card { border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; background:#f8fafc; }
+  .card b { display:block; font-size:22px; line-height:1.1; }
+  .card span { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#64748b;
+               font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .card.claim b { color:#b91c1c; }
+  .card.ok b { color:#15803d; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.14em; color:#475569;
+       border-bottom:1px solid #e2e8f0; padding-bottom:7px; margin:32px 0 16px; }
+  .finding { border:1px solid #fecaca; background:#fef2f2; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+  .finding header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .finding h3 { margin:0; font-size:16px; }
+  .sector { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#9f1239;
+            font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:nowrap; }
+  .note { margin:8px 0 0; }
+  .note.muted { color:#94a3b8; font-style:italic; }
+  .meta, .stamp { margin:8px 0 0; font-size:12px; color:#64748b;
+                  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .stamp { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
+  .shortfall { margin:8px 0 0; font-weight:700; color:#b91c1c; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  .sector-head th { text-align:left; padding:14px 8px 6px; font-size:10px; text-transform:uppercase;
+                    letter-spacing:.12em; color:#0f172a; border-bottom:2px solid #cbd5e1; }
+  .sector-head span { color:#94a3b8; margin-left:6px; }
+  td { padding:6px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  td.status { width:112px; white-space:nowrap; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+              font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  td.detail { color:#64748b; font-size:12px; }
+  .col-head th { text-align:left; padding:4px 8px; font-size:9px; text-transform:uppercase;
+                 letter-spacing:.12em; color:#94a3b8; border-bottom:1px solid #e2e8f0; }
+  tr.s-verified td.status { color:#15803d; }
+  tr.s-deficit td.status { color:#b91c1c; font-weight:700; }
+  tr.s-pending td.status { color:#94a3b8; }
+  .signoff { margin-top:32px; padding-top:16px; border-top:1px solid #e2e8f0;
+             display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+             font-size:12px; color:#475569; }
+  .signoff b { display:block; color:#0f172a; font-size:14px; }
+  footer { margin-top:20px; font-size:10px; color:#94a3b8; text-align:center;
+           font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+           text-transform:uppercase; letter-spacing:.1em; }
+  @page { margin: 14mm 12mm; }
+  @media print {
+    body { background:#fff; padding:0; font-size:11pt; }
+    .sheet { border:0; border-radius:0; padding:0; max-width:none; }
+    /* Status colours and the red finding panels carry meaning, so keep the
+       browser from helpfully stripping them out of the PDF. */
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .finding, .card { break-inside:avoid; }
+    h2 { break-after:avoid; }
+    tbody { break-inside:auto; }
+    tr { break-inside:avoid; }
+    .sector-head th { break-after:avoid; }
+    /* Repeat the column meanings at the top of every printed page. */
+    thead { display:table-header-group; }
+    .signoff { break-inside:avoid; }
+    .screen-only { display:none !important; }
+  }
+`;
+
 const esc = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
   );
 
+/* Written for a reader, not a log parser: "19 Aug 2026, 11:53 PM". */
+const HUMAN = { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' };
 const fmtDate = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, HUMAN);
 };
+
+/* Becomes the PDF's default filename when the reader hits "Save as PDF", so
+ * it is written the way a person would name the file. */
+export function reportTitle(property, at = new Date()) {
+  return `Turnover Report - ${property.name} - ${at.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })}`;
+}
 
 export function buildReport(property, report, options = {}) {
   const stats = computeStats(property);
@@ -81,69 +166,17 @@ export function buildReport(property, report, options = {}) {
     return `<tbody><tr class="sector-head"><th colspan="3">${esc(sector.name)} <span>${esc(sector.zone)}</span></th></tr>${rows}</tbody>`;
   }).join('');
 
+  const tableHead =
+    '<thead><tr class="col-head"><th>Asset</th><th>Status</th><th>Detail</th></tr></thead>';
+
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Turnover Report — ${esc(property.name)}</title>
-<style>
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; }
-  body { margin:0; padding:24px; background:#f1f5f9; color:#0f172a;
-         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  .sheet { max-width:820px; margin:0 auto; background:#fff; border:1px solid #cbd5e1;
-           border-radius:10px; padding:32px; }
-  h1 { margin:0 0 4px; font-size:22px; letter-spacing:-0.01em; }
-  .sub { margin:0 0 24px; color:#64748b; font-size:13px;
-         font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-         text-transform:uppercase; letter-spacing:.09em; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:28px; }
-  .card { border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; background:#f8fafc; }
-  .card b { display:block; font-size:22px; line-height:1.1; }
-  .card span { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#64748b;
-               font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  .card.claim b { color:#b91c1c; }
-  .card.ok b { color:#15803d; }
-  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.14em; color:#475569;
-       border-bottom:1px solid #e2e8f0; padding-bottom:7px; margin:32px 0 16px; }
-  .finding { border:1px solid #fecaca; background:#fef2f2; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
-  .finding header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
-  .finding h3 { margin:0; font-size:16px; }
-  .sector { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#9f1239;
-            font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:nowrap; }
-  .note { margin:8px 0 0; }
-  .note.muted { color:#94a3b8; font-style:italic; }
-  .meta, .stamp { margin:8px 0 0; font-size:12px; color:#64748b;
-                  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  .stamp { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
-  .shortfall { margin:8px 0 0; font-weight:700; color:#b91c1c; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  .sector-head th { text-align:left; padding:14px 8px 6px; font-size:10px; text-transform:uppercase;
-                    letter-spacing:.12em; color:#0f172a; border-bottom:2px solid #cbd5e1; }
-  .sector-head span { color:#94a3b8; margin-left:6px; }
-  td { padding:6px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-  td.status { width:112px; white-space:nowrap; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
-              font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  td.detail { color:#64748b; font-size:12px; }
-  tr.s-verified td.status { color:#15803d; }
-  tr.s-deficit td.status { color:#b91c1c; font-weight:700; }
-  tr.s-pending td.status { color:#94a3b8; }
-  .signoff { margin-top:32px; padding-top:16px; border-top:1px solid #e2e8f0;
-             display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
-             font-size:12px; color:#475569; }
-  .signoff b { display:block; color:#0f172a; font-size:14px; }
-  footer { margin-top:20px; font-size:10px; color:#94a3b8; text-align:center;
-           font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-           text-transform:uppercase; letter-spacing:.1em; }
-  @media print {
-    body { background:#fff; padding:0; }
-    .sheet { border:0; border-radius:0; padding:0; max-width:none; }
-    .finding { break-inside:avoid; }
-    tbody { break-inside:avoid; }
-  }
-</style></head>
+<title>${esc(reportTitle(property, generatedAt))}</title>
+<style>${REPORT_STYLES}</style></head>
 <body><div class="sheet">
   <h1>${esc(property.name)}</h1>
-  <p class="sub">Turnover inventory report &middot; generated ${esc(generatedAt.toLocaleString())}</p>
+  <p class="sub">Turnover inventory report &middot; generated ${esc(generatedAt.toLocaleString(undefined, HUMAN))}</p>
 
   <div class="cards">
     <div class="card ok"><b>${stats.verified}/${stats.total}</b><span>Verified</span></div>
@@ -161,7 +194,7 @@ export function buildReport(property, report, options = {}) {
   }
 
   <h2>Full inventory</h2>
-  <table>${sectorRows}</table>
+  <table>${tableHead}${sectorRows}</table>
 
   <div class="signoff">
     <div><b>${esc(property.signedOffBy || 'Unsigned')}</b>Audited by</div>
@@ -171,11 +204,4 @@ export function buildReport(property, report, options = {}) {
 
   <footer>Frictionless Operations &middot; Property Turnover Matrix</footer>
 </div></body></html>`;
-}
-
-export function reportFilename(property, at = new Date()) {
-  const slug =
-    property.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'property';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `turnover-report_${slug}_${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}.html`;
 }
