@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #020617; /* slate-950 — paints before React mounts */
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    /* The shell owns scrolling (100dvh column); the document must never
+     * bounce underneath it or the locked header detaches on iOS. */
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS zooms the viewport when a focused input is under 16px. Every field the
+   * operative types into is therefore held at 16px on coarse pointers. */
+  @media (pointer: coarse) {
+    input, textarea, select { font-size: 16px; }
+  }
+
+  /* Native select popups render light-on-light in dark mode on some Androids. */
+  option { background-color: #020617; color: #e2e8f0; }
+}
+
+@layer utilities {
+  /* Thin, dark scrollbar for the desktop/tablet case. */
+  .overflow-y-auto { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+  .overflow-y-auto::-webkit-scrollbar { width: 6px; }
+  .overflow-y-auto::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+}
