@@ -27,6 +27,8 @@ export const EMPTY_ITEM = {
   model: '',
   serial: '',
   condition: '',
+  cost: '',      // replacement value, drives the claim total
+  photos: [],    // manifest only — the image bytes live in IndexedDB
   updatedAt: null,
 };
 
@@ -44,13 +46,25 @@ export function cloneProperty(source, name) {
     name: String(name).trim() || `${source.name} (copy)`,
     createdAt: now,
     updatedAt: now,
+    /* A copy is a fresh walkthrough: it inherits the findings but not the
+     * previous inspector's signature. */
+    signedOffBy: '',
+    signedOffAt: null,
     items,
   };
 }
 
 export function makeProperty(name) {
   const now = new Date().toISOString();
-  return { id: uid(), name: String(name).trim() || 'Untitled Unit', createdAt: now, updatedAt: now, items: {} };
+  return {
+    id: uid(),
+    name: String(name).trim() || 'Untitled Unit',
+    createdAt: now,
+    updatedAt: now,
+    signedOffBy: '',
+    signedOffAt: null,
+    items: {},
+  };
 }
 
 export function defaultState() {
@@ -85,6 +99,8 @@ function sanitizeItem(raw) {
     model: str(raw.model),
     serial: str(raw.serial),
     condition: str(raw.condition),
+    cost: str(raw.cost),
+    photos: Array.isArray(raw.photos) ? raw.photos.filter((id) => typeof id === 'string') : [],
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
   };
   return isBlank(item) ? null : item;
@@ -94,7 +110,8 @@ function sanitizeItem(raw) {
 export function isBlank(item) {
   return (
     item.status === PENDING &&
-    !item.note && !item.qty && !item.brand && !item.model && !item.serial && !item.condition
+    !item.note && !item.qty && !item.brand && !item.model && !item.serial &&
+    !item.condition && !item.cost && !item.photos?.length
   );
 }
 
@@ -115,6 +132,8 @@ function sanitizeProperty(raw) {
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name : 'Untitled Unit',
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+    signedOffBy: typeof raw.signedOffBy === 'string' ? raw.signedOffBy : '',
+    signedOffAt: typeof raw.signedOffAt === 'string' ? raw.signedOffAt : null,
     items,
   };
 }
@@ -194,6 +213,56 @@ export function sectorStats(property, sector) {
   return { verified, deficit, total: sector.items.length };
 }
 
+/* Every finding on a property, in checklist order, with its evidence and
+ * replacement value. This is what the report view and the HTML export render,
+ * and what a manager actually acts on after a walkthrough. */
+export function deficitReport(property) {
+  const lines = [];
+  let claim = 0;
+  let photoCount = 0;
+  for (const item of ALL_ITEMS) {
+    const state = getItem(property, item.id);
+    if (state.status !== DEFICIT) continue;
+    const cost = parseMoney(state.cost);
+    claim += cost;
+    photoCount += state.photos.length;
+    lines.push({
+      id: item.id,
+      label: item.label,
+      sector: item.sectorName,
+      note: state.note,
+      qty: state.qty,
+      condition: state.condition,
+      cost,
+      costRaw: state.cost,
+      photos: state.photos,
+      updatedAt: state.updatedAt,
+    });
+  }
+  return { lines, claim, photoCount, count: lines.length };
+}
+
+/* Operatives type "45", "$45", "45.00" and "1,250" — all of them mean money. */
+export function parseMoney(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const n = parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+export const formatMoney = (n) =>
+  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+
+/* Photos attached anywhere on a property, not just to deficits. */
+export function photoManifest(property) {
+  const out = [];
+  for (const item of ALL_ITEMS) {
+    for (const photoId of getItem(property, item.id).photos) {
+      out.push({ itemId: item.id, label: item.label, sector: item.sectorName, photoId });
+    }
+  }
+  return out;
+}
+
 /* Compact "how stale is this audit" readout for the property list. */
 export function relativeTime(iso) {
   if (!iso) return 'never';
@@ -233,7 +302,10 @@ export const CSV_COLUMNS = [
   'Model #',
   'Serial #',
   'Condition',
+  'Replacement Cost',
+  'Photos',
   'Last Updated',
+  'Audited By',
 ];
 
 function csvRows(property, stamp) {
@@ -253,7 +325,10 @@ function csvRows(property, stamp) {
         state.model,
         state.serial,
         state.condition,
+        state.cost ? parseMoney(state.cost).toFixed(2) : '',
+        state.photos.length || '',
         state.updatedAt || '',
+        property.signedOffBy || '',
       ]
         .map(csvCell)
         .join(',')
@@ -289,6 +364,68 @@ export function csvFilename(property, exportedAt = new Date()) {
 function triggerDownload(text, filename) {
   /* BOM keeps Excel from mangling UTF-8 in operative-typed deficit notes. */
   const blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* --- backup / restore ------------------------------------------------------
+ * localStorage is one browser profile on one device. Clearing site data, a
+ * dead phone, or an OS reinstall takes every audit with it, and an operative
+ * has no way to hand a walkthrough to a colleague. A backup file is the escape
+ * hatch: the full state plus every photo, in one portable JSON. */
+
+export const BACKUP_FORMAT = 'fo.turnover.backup';
+
+export function buildBackup(state, photos) {
+  return JSON.stringify({
+    format: BACKUP_FORMAT,
+    v: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    propertyCount: state.properties.length,
+    photoCount: Object.keys(photos).length,
+    state,
+    photos,
+  });
+}
+
+/* Rejects anything that is not one of our backups rather than half-importing
+ * a stranger's JSON and corrupting a live portfolio. */
+export function parseBackup(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('That file is not valid JSON.');
+  }
+  if (parsed?.format !== BACKUP_FORMAT) {
+    throw new Error('That file is not a Turnover Matrix backup.');
+  }
+  const properties = Array.isArray(parsed?.state?.properties)
+    ? parsed.state.properties.map(sanitizeProperty).filter(Boolean)
+    : [];
+  if (!properties.length) throw new Error('The backup contains no properties.');
+  const photos = parsed.photos && typeof parsed.photos === 'object' ? parsed.photos : {};
+  return {
+    exportedAt: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : null,
+    properties,
+    photos,
+  };
+}
+
+export function backupFilename(exportedAt = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const t = exportedAt;
+  return `turnover-backup_${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}.json`;
+}
+
+export function downloadText(text, filename, type = 'application/json') {
+  const blob = new Blob([text], { type: `${type};charset=utf-8;` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

@@ -22,8 +22,12 @@ with the service worker, the console boots and runs with the network fully down.
 | `icon-*.png` | Icon set (generated from an inline SVG by `npm run icons`) |
 | `src/inventory.js` | The master checklist — 69 assets across 12 spatial sectors |
 | `tools/verify-checklist.mjs` | Asserts the checklist still matches the source document |
-| `src/store.js` | Persistence, derived metrics, CSV extraction |
-| `src/app.jsx` | UI |
+| `src/store.js` | Persistence, derived metrics, CSV, backup format |
+| `src/photos.js` | IndexedDB photo store + capture/downscale pipeline |
+| `src/report.js` | Self-contained printable evidence report |
+| `src/app.jsx` | App shell, state, exports |
+| `src/ui.jsx` | Modal / button / field primitives |
+| `src/components/` | AssetRow, Sector, PhotoStrip, and the three sheets |
 | `src/styles.css` | Tailwind entry + base layer |
 | `src/shell.html` | HTML skeleton the build injects CSS/JS into |
 
@@ -41,6 +45,59 @@ npm test          # drive the built page through the browser suite
 The build also computes SHA-256 hashes of the inlined script and style and
 writes them into a strict `Content-Security-Policy` meta tag, so the page
 carries no `unsafe-inline`.
+
+## Evidence, not just ticks
+
+A note reading “stove scratched” is worth very little when a guest disputes a
+deposit; a dated photo of the scratch is worth a great deal. Deficits therefore
+carry **photos** and a **replacement value**.
+
+Photos are captured straight from the phone camera, rotated per EXIF, and
+downscaled twice on the way in — a long-edge-1400 copy for the report and a
+220px thumbnail for the audit list. A 12 MP capture lands at roughly 100–250 KB.
+
+**The bytes live in IndexedDB; localStorage only holds a manifest of photo ids.**
+This split is load-bearing: localStorage tops out near 5 MB and is synchronous,
+so a handful of full-size images would evict an entire portfolio's audit data.
+There is a test asserting image bytes never reach localStorage.
+
+**Findings** (header, right) is the deliverable end of the app: every deficit in
+one screen, the summed claim value, a sign-off field, and two exports.
+
+- **Report** — a self-contained HTML page with the photos embedded as data URIs.
+  It opens anywhere, prints to PDF, and survives being forwarded, because it
+  references nothing external. This is what you send an owner.
+- **CSV** — the spreadsheet form, now including Replacement Cost, Photos and
+  Audited By.
+
+Signing puts your name on both in the same gesture.
+
+## Working through 69 assets
+
+- **Filters** — All / To do / Deficits. The second pass is “what's left” and
+  “what's broken”, not another scroll through everything.
+- **Search** — narrow to one asset by name.
+- **Jump** (crosshair) — scrolls the next unaudited asset into view, so an
+  interrupted walkthrough resumes where it stopped.
+- **Verify-all** (per sector header) — whole rooms are routinely fine, and nine
+  taps to say so is nine taps an operative will skip. A skipped room is an
+  unaudited one.
+- **Collapse** — tap a sector header to fold a room away.
+- **Undo** — bulk verify, checklist reset, property purge and restore all leave
+  a 7-second Undo in the toast. Destructive actions defer their photo deletes
+  until that window shuts, so undoing a reset brings the evidence back too, not
+  a hollow shell.
+
+## Backup & restore
+
+Everything lives in one browser profile on one device: clearing site data, a
+dead phone, or an OS reinstall takes every audit with it, and there is no server
+to fall back on. The database button in the action bar writes one JSON file
+carrying every property, every audit and every photo.
+
+Restoring offers **Add** (append to what's here) or **Replace everything**.
+Take a backup after each turnover, and use it to move work between devices or
+hand a walkthrough to a colleague.
 
 ## The property roster
 
@@ -88,14 +145,17 @@ there is no debounce and no unsaved window.
 
 **Storage can fail.** Safari private mode and locked-down WebViews throw on
 `setItem`. The app detects this at boot, keeps working in memory, and shows a
-banner telling the operative to export before closing the tab.
+banner telling the operative to export before closing the tab. IndexedDB is
+probed the same way — if it is unavailable, photo capture simply does not
+appear rather than failing at the moment of use.
 
 **Destructive actions are phrase-gated.** *Nuclear Reset* (wipes the active
 property's checklist) requires typing `RESET`; purging a property profile
 requires typing `DELETE`. Both name what will be destroyed first.
 
 **CSV columns.** `Property Name, Timestamp, Category, Asset, Status,
-Deficit Notes, Quantity, Brand, Model #, Serial #, Condition, Last Updated`.
+Deficit Notes, Quantity, Brand, Model #, Serial #, Condition, Replacement Cost,
+Photos, Last Updated, Audited By`.
 Written RFC 4180-quoted with a UTF-8 BOM for Excel; cells opening with
 `= + - @` are prefixed so a spreadsheet treats a deficit note as text rather
 than a formula.

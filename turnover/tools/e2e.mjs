@@ -10,6 +10,8 @@
  * ========================================================================= */
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdtempSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -17,6 +19,7 @@ import { chromium } from 'playwright';
 const PORT = Number(process.env.PORT) || 8099;
 const BASE = `http://localhost:${PORT}/`;
 const SHOTS = process.env.SHOTS || mkdtempSync(join(tmpdir(), 'turnover-shots-'));
+const FIXTURE = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures/evidence.jpg');
 
 const results = [];
 const check = (name, pass, detail = '') => {
@@ -124,13 +127,24 @@ check('deficit status survives reload',
       (await page.locator('#k-refrigerator-note').count()) === 1);
 
 /* ── sticky headers ───────────────────────────────────────────────────── */
-await page.locator('main').evaluate((el) => { el.scrollTop = 1200; });
-await page.waitForTimeout(120);
-const stuck = await page.locator('main section > header').evaluateAll((hs) => {
-  const main = document.querySelector('main').getBoundingClientRect();
-  return hs.filter((h) => Math.abs(h.getBoundingClientRect().top - main.top) < 2).length;
+/* Scroll a known asset deep inside a sector into view, then assert THAT
+   sector's own header is the one pinned — a fixed scroll offset can land in
+   the gap between sections and prove nothing. */
+await page.locator('#row-u-corkscrew').scrollIntoViewIfNeeded();
+await page.waitForTimeout(150);
+const pinned = await page.evaluate(() => {
+  const row = document.getElementById('row-u-corkscrew');
+  const header = row.closest('section').querySelector('header');
+  const mainTop = document.querySelector('main').getBoundingClientRect().top;
+  return {
+    name: header.textContent.trim().slice(0, 20),
+    delta: +(header.getBoundingClientRect().top - mainTop).toFixed(1),
+    position: getComputedStyle(header).position,
+  };
 });
-check('a sector header is locked to the top', stuck >= 1, `${stuck} stuck`);
+check('the sector header locks to the top while you scroll its assets',
+      pinned.position === 'sticky' && Math.abs(pinned.delta) < 2,
+      `${pinned.name} @ ${pinned.delta}px`);
 await page.screenshot({ path: SHOTS + '/02-scrolled.png' });
 
 /* ── multi-node: add a property ───────────────────────────────────────── */
@@ -292,6 +306,161 @@ await ctx.setOffline(false);
 check('no page errors overall', errors.length === 0, errors.slice(0, 3).join(' / '));
 
 
+/* ══ 1b. Evidence, second-pass views, and undo ═════════════════════════ */
+console.log('\nevidence + audit ergonomics');
+{
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, acceptDownloads: true });
+  const pg = await c.newPage();
+  const errs = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await pg.waitForTimeout(400);
+
+  /* --- photo evidence on a deficit --- */
+  await pg.getByLabel('Flag deficit on Grill').click();
+  await pg.fill('#p-grill-note', 'Firebox rusted through');
+  await pg.fill('#p-grill-cost', '240');
+  await pg.locator('#row-p-grill input[type=file]').setInputFiles(FIXTURE);
+  await pg.waitForTimeout(900);
+  const thumbs = pg.locator('#row-p-grill img');
+  check('photo attaches to the asset', (await thumbs.count()) === 1);
+
+  /* The whole point of the two-store split: bytes in IndexedDB, not in the
+     5 MB localStorage bucket that holds the audit. */
+  const sizes = await pg.evaluate(async () => {
+    const raw = localStorage.getItem('fo.turnover.matrix.v1');
+    const db = await new Promise((res) => {
+      const r = indexedDB.open('fo.turnover.photos', 1);
+      r.onsuccess = () => res(r.result);
+    });
+    const recs = await new Promise((res) => {
+      const req = db.transaction('photos').objectStore('photos').getAll();
+      req.onsuccess = () => res(req.result);
+    });
+    return {
+      localStorage: raw.length,
+      idbBytes: recs.reduce((n, r) => n + r.full.size + r.thumb.size, 0),
+      fullSize: recs[0]?.full?.size ?? 0,
+    };
+  });
+  check('image bytes stay out of localStorage', sizes.localStorage < 4000, `${sizes.localStorage} chars`);
+  check('image is downscaled on capture', sizes.fullSize > 0 && sizes.fullSize < 400_000, `${sizes.fullSize} bytes`);
+
+  await pg.screenshot({ path: SHOTS + '/12-evidence.png' });
+
+  /* --- lightbox --- */
+  await pg.getByLabel(/^View photo 1 of 1 for Grill/).click();
+  await pg.waitForTimeout(400);
+  check('lightbox opens the full image', (await pg.locator('[role=dialog] img').count()) === 1);
+  await pg.getByLabel('Close photo').click();
+
+  /* --- photo survives a reload (IndexedDB round trip) --- */
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForTimeout(700);
+  check('photo survives a reload', (await pg.locator('#row-p-grill img').count()) === 1);
+  check('replacement cost survives a reload', (await pg.inputValue('#p-grill-cost')) === '240');
+
+  /* --- bulk verify a whole room, then undo it --- */
+  await pg.getByLabel(/^Verify all 5 remaining assets in Bathroom Hardware/).click();
+  await pg.waitForTimeout(200);
+  check('bulk verify ticks the whole sector',
+        (await pg.locator('#row-ba-hair-dryer [role=checkbox][aria-checked=true]').count()) === 1);
+  await pg.getByRole('button', { name: 'Undo' }).click();
+  await pg.waitForTimeout(200);
+  check('undo restores the sector',
+        (await pg.locator('#row-ba-hair-dryer [role=checkbox][aria-checked=false]').count()) === 1);
+
+  /* --- filters --- */
+  await pg.getByRole('tab', { name: /Deficits/ }).click();
+  await pg.waitForTimeout(200);
+  const deficitRows = await pg.locator('li[id^=row-]').count();
+  check('deficit filter shows only findings', deficitRows === 1, `${deficitRows} rows`);
+  await pg.getByRole('tab', { name: 'To do' }).click();
+  await pg.waitForTimeout(200);
+  check('to-do filter hides the audited asset',
+        (await pg.locator('#row-p-grill').count()) === 0);
+  await pg.getByRole('tab', { name: 'All' }).click();
+
+  /* --- asset search --- */
+  await pg.getByLabel('Search assets').click();
+  await pg.fill('input[aria-label="Search assets by name"]', 'corkscrew');
+  await pg.waitForTimeout(200);
+  check('search narrows to one asset', (await pg.locator('li[id^=row-]').count()) === 1);
+  await pg.getByLabel('Clear search').click();
+  await pg.getByLabel('Close asset search').click();
+
+  /* --- jump to next unaudited --- */
+  await pg.getByLabel('Jump to the next unaudited asset').click();
+  await pg.waitForTimeout(600);
+  const jumped = await pg.evaluate(() => {
+    const el = document.getElementById('row-k-refrigerator');
+    const main = document.querySelector('main').getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return r.top > main.top - 10 && r.bottom < main.bottom + 10;
+  });
+  check('jump scrolls the next unaudited asset into view', jumped);
+
+  /* --- findings sheet, sign-off, and the HTML report --- */
+  await pg.getByLabel('Open findings and export').click();
+  await pg.waitForTimeout(200);
+  check('findings sheet totals the claim',
+        (await pg.getByText('$240.00').count()) >= 1);
+  await pg.fill('#signoff-name', 'J. Rivera');
+  await pg.screenshot({ path: SHOTS + '/13-findings.png' });
+  const rep = await Promise.all([
+    pg.waitForEvent('download', { timeout: 15000 }),
+    pg.getByRole('button', { name: /^Report/ }).click(),
+  ]).then((r) => r[0]).catch(() => null);
+  check('report downloads', !!rep, rep ? await rep.suggestedFilename() : 'no download');
+  if (rep) {
+    const html = readFileSync(await rep.path(), 'utf8');
+    check('report embeds the photo', html.includes('data:image/jpeg;base64,'));
+    check('report carries the finding and the claim',
+          html.includes('Firebox rusted through') && html.includes('$240.00'));
+    check('report is signed', html.includes('J. Rivera'));
+    check('report is self-contained', !/<(script|link|iframe)\b/i.test(html));
+  }
+
+  /* --- backup round trip --- */
+  await pg.getByLabel('Backup and restore').click();
+  await pg.waitForTimeout(300);
+  const bk = await Promise.all([
+    pg.waitForEvent('download', { timeout: 15000 }),
+    pg.getByRole('button', { name: /Download backup/ }).click(),
+  ]).then((r) => r[0]).catch(() => null);
+  check('backup downloads', !!bk, bk ? await bk.suggestedFilename() : 'no download');
+  if (bk) {
+    const backupPath = await bk.path();
+    const parsed = JSON.parse(readFileSync(backupPath, 'utf8'));
+    check('backup carries the photo bytes',
+          Object.values(parsed.photos)[0]?.full?.startsWith('data:image/jpeg'));
+
+    /* Wipe the device, then restore from the file. */
+    await pg.evaluate(async () => {
+      localStorage.clear();
+      await new Promise((res) => {
+        const r = indexedDB.deleteDatabase('fo.turnover.photos');
+        r.onsuccess = r.onerror = r.onblocked = () => res();
+      });
+    });
+    await pg.reload({ waitUntil: 'networkidle' });
+    await pg.waitForTimeout(400);
+    check('device really was wiped', (await pg.locator('#row-p-grill img').count()) === 0);
+
+    await pg.getByLabel('Backup and restore').click();
+    await pg.setInputFiles('input[aria-label="Choose a backup file to restore"]', backupPath);
+    await pg.waitForTimeout(400);
+    await pg.getByRole('button', { name: 'Replace everything' }).click();
+    await pg.waitForTimeout(900);
+    check('restore brings the finding back',
+          (await pg.inputValue('#p-grill-note')) === 'Firebox rusted through');
+    check('restore brings the photo back', (await pg.locator('#row-p-grill img').count()) === 1);
+  }
+
+  check('no page errors across the evidence flow', errs.length === 0, errs.slice(0, 2).join(' / '));
+  await c.close();
+}
+
 /* ══ 2. Layout across device classes ═══════════════════════════════════ */
 console.log('\nlayout across device classes');
 for (const [label, w, h] of [['iPhone SE 320', 320, 568], ['iPhone 14 390', 390, 844], ['iPad 768', 768, 1024]]) {
@@ -316,6 +485,9 @@ for (const [label, w, h] of [['iPhone SE 320', 320, 568], ['iPhone 14 390', 390,
 
   const tiny = await p.evaluate(() =>
     [...document.querySelectorAll('button, select, input, textarea')]
+      /* Screen-reader-only inputs (the file picker behind the camera tile)
+         are 1×1 by design; the visible label wrapping them is the target. */
+      .filter((el) => !el.classList.contains('sr-only'))
       .map((el) => ({ id: el.getAttribute('aria-label') || el.tagName, ...el.getBoundingClientRect().toJSON() }))
       .filter((b) => b.width > 0 && (b.height < 36 || b.width < 24))
       .map((b) => `${b.id} ${Math.round(b.width)}×${Math.round(b.height)}`));

@@ -6,583 +6,60 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  AlertTriangle, BedDouble, Check, ChevronDown, ChevronRight, CookingPot, Copy, Download,
-  Ellipsis, Layers, Pencil, Plus, Refrigerator, RotateCcw, Search, ShowerHead, Sofa, Soup,
-  Sun, Trash2, Utensils, UtensilsCrossed, WashingMachine, Waves, X,
+  ChevronDown, ClipboardList, Crosshair, Database, Plus, RotateCcw, Search, Undo2, X,
 } from 'lucide-react';
 
-import { SECTORS, FIELD_LABELS } from './inventory.js';
+import { SECTORS } from './inventory.js';
 import {
-  DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, cloneProperty, computeStats, defaultState,
-  downloadCSV, downloadCSVAll, getItem, isBlank, loadState, makeProperty, phaseOf,
-  probeStorage, relativeTime, saveState, sectorStats,
+  DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, backupFilename, buildBackup, cloneProperty,
+  computeStats, csvFilename, defaultState, deficitReport, downloadCSV, downloadCSVAll,
+  downloadText, getItem, isBlank, loadState, makeProperty, parseBackup, phaseOf,
+  photoManifest, probeStorage, saveState,
 } from './store.js';
+import { buildReport, reportFilename } from './report.js';
+import {
+  blobToDataURL, clearPhotos, dataURLToBlob, deletePhoto, deletePhotosByPrefix, allEntries,
+  getPhoto, newPhotoId, photoBytes, photoKey, photosAvailable, processCapture, putPhoto,
+} from './photos.js';
+import { ConfirmPhrase, Modal, btn, input } from './ui.jsx';
+import { Sector } from './components/Sector.jsx';
+import { Lightbox } from './components/PhotoStrip.jsx';
+import { PropertySheet } from './components/PropertySheet.jsx';
+import { ReportSheet } from './components/ReportSheet.jsx';
+import { BackupSheet } from './components/BackupSheet.jsx';
 
-const SECTOR_ICONS = {
-  Refrigerator, CookingPot, Soup, UtensilsCrossed, Utensils, Sofa, BedDouble,
-  Layers, ShowerHead, WashingMachine, Sun, Waves,
-};
-
-/* Status advances on a single tap: unengaged -> verified -> deficit -> unengaged.
- * Un-checking a verified asset therefore lands on DEFICIT, which is what
- * reveals the deficit-note field. */
-const NEXT_STATUS = { [PENDING]: VERIFIED, [VERIFIED]: DEFICIT, [DEFICIT]: PENDING };
-
-/* ── Primitives ─────────────────────────────────────────────────────────── */
-
-function StatusBox({ status, onClick, label }) {
-  const verified = status === VERIFIED;
-  const deficit = status === DEFICIT;
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={verified ? 'true' : deficit ? 'mixed' : 'false'}
-      aria-label={`${label} — ${verified ? 'verified' : deficit ? 'deficit logged' : 'not verified'}. Activate to advance.`}
-      onClick={onClick}
-      className={[
-        // 28px visual box inside a 48px touch target — comfortably past the
-        // 24px floor and past the 44px accessible-tap-target guidance.
-        'grid h-12 w-12 shrink-0 place-items-center rounded-lg transition-colors',
-        'active:scale-95 motion-safe:transition-transform',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70',
-      ].join(' ')}
-    >
-      <span
-        className={[
-          'grid h-7 w-7 place-items-center rounded-md border-2 transition-all duration-150',
-          verified
-            ? 'border-green-400 bg-green-400 text-slate-950 shadow-[0_0_0_4px_rgba(74,222,128,0.18)]'
-            : deficit
-              ? 'border-red-400 bg-red-500 text-white shadow-[0_0_0_4px_rgba(248,113,113,0.18)]'
-              : 'border-slate-600 bg-slate-950',
-        ].join(' ')}
-      >
-        {verified && <Check size={18} strokeWidth={3.5} aria-hidden="true" />}
-        {deficit && <AlertTriangle size={16} strokeWidth={3} aria-hidden="true" />}
-      </span>
-    </button>
-  );
-}
-
-function Field({ id, label, value, onChange, mono = false, placeholder = '', wide = false }) {
-  return (
-    <label htmlFor={id} className={wide ? 'col-span-2 block' : 'block'}>
-      <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-        {label}
-      </span>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className={[
-          'w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100',
-          'placeholder:text-slate-600 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500',
-          mono ? 'font-mono tracking-wide' : '',
-        ].join(' ')}
-      />
-    </label>
-  );
-}
-
-/* ── Asset row ──────────────────────────────────────────────────────────── */
-
-function AssetRow({ item, state, onPatch }) {
-  const verified = state.status === VERIFIED;
-  const deficit = state.status === DEFICIT;
-  const engaged = state.status !== PENDING;
-  const set = (key) => (value) => onPatch({ [key]: value });
-
-  const capturable = Boolean(item.qty || item.condition || item.fields);
-  /* Ticking "present" should cost one tap, so the capture panel only opens by
-   * itself where the data is the point: a deficit needs its note, and the
-   * appliances exist in the checklist to have their serials read off. Anything
-   * else is one chevron away. A manual toggle wins over the default. */
-  const autoOpen = deficit || (verified && Boolean(item.fields));
-  const [override, setOverride] = useState(null);
-  const open = engaged && (override ?? autoOpen);
-
-  return (
-    <li
-      className={[
-        'border-b border-slate-800/70 last:border-b-0 transition-colors',
-        deficit ? 'bg-red-950/25' : verified ? 'bg-green-950/10' : '',
-      ].join(' ')}
-    >
-      <div className="flex items-center gap-1 pl-1 pr-2">
-        <StatusBox
-          status={state.status}
-          label={item.label}
-          onClick={() => onPatch({ status: NEXT_STATUS[state.status] })}
-        />
-        {/* The label is part of the tap target: thumbs miss small boxes. */}
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-hidden="true"
-          onClick={() => onPatch({ status: NEXT_STATUS[state.status] })}
-          className="flex min-w-0 flex-1 flex-col items-start py-3 pr-1 text-left"
-        >
-          <span
-            className={[
-              'text-[15px] font-medium leading-tight',
-              verified ? 'text-slate-300' : deficit ? 'text-red-200' : 'text-slate-200',
-            ].join(' ')}
-          >
-            {item.label}
-          </span>
-          {item.hint && (
-            <span className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-500">
-              {item.hint}
-            </span>
-          )}
-        </button>
-
-        {state.qty && !open ? (
-          <span className="shrink-0 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 font-mono text-[11px] text-slate-400">
-            ×{state.qty}
-          </span>
-        ) : null}
-
-        {engaged && capturable && (
-          <button
-            type="button"
-            onClick={() => setOverride(!open)}
-            aria-expanded={open}
-            aria-controls={`${item.id}-capture`}
-            aria-label={`${open ? 'Hide' : 'Show'} capture fields for ${item.label}`}
-            className="grid h-11 w-8 shrink-0 place-items-center rounded-md text-slate-500 transition-colors hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70"
-          >
-            {open ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => onPatch({ status: deficit ? PENDING : DEFICIT })}
-          aria-label={deficit ? `Clear deficit on ${item.label}` : `Flag deficit on ${item.label}`}
-          aria-pressed={deficit}
-          className={[
-            'grid h-11 w-9 shrink-0 place-items-center rounded-md transition-colors',
-            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70',
-            deficit ? 'text-red-400' : 'text-slate-600 hover:text-red-400',
-          ].join(' ')}
-        >
-          <AlertTriangle size={17} strokeWidth={2.2} aria-hidden="true" />
-        </button>
-      </div>
-
-      {/* A collapsed deficit still has to read at a glance during a walkthrough. */}
-      {deficit && !open && state.note && (
-        <p className="truncate px-3 pb-2.5 pl-14 font-mono text-[11px] text-red-400/80">
-          {state.note}
-        </p>
-      )}
-
-      {/* Capture panel. The deficit note is gated on DEFICIT specifically —
-          that is the "hidden field" reveal. */}
-      {open && (
-        <div id={`${item.id}-capture`} className="grid grid-cols-2 gap-2.5 px-3 pb-3.5 pl-14">
-          {item.qty && (
-            <Field
-              id={`${item.id}-qty`} label="Quantity" mono placeholder="0"
-              value={state.qty} onChange={set('qty')}
-            />
-          )}
-          {item.condition && (
-            <Field
-              id={`${item.id}-condition`} label="Condition" wide={!item.qty}
-              placeholder="Rust, stains, wear…"
-              value={state.condition} onChange={set('condition')}
-            />
-          )}
-          {item.fields?.map((f) => (
-            <Field
-              key={f}
-              id={`${item.id}-${f}`}
-              label={FIELD_LABELS[f]}
-              mono={f !== 'brand'}
-              wide={f === 'serial'}
-              placeholder={f === 'brand' ? 'Manufacturer' : '—'}
-              value={state[f]}
-              onChange={set(f)}
-            />
-          ))}
-          {deficit && (
-            <label htmlFor={`${item.id}-note`} className="col-span-2 block">
-              <span className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-red-400">
-                <AlertTriangle size={11} strokeWidth={2.5} aria-hidden="true" />
-                Deficit Log
-              </span>
-              <textarea
-                id={`${item.id}-note`}
-                rows={2}
-                value={state.note}
-                onChange={(e) => onPatch({ note: e.target.value })}
-                placeholder="e.g. Missing 2 forks / Stove scratched on left burner"
-                className="w-full resize-y rounded-md border border-red-500/40 bg-red-950/30 px-3 py-2.5 text-sm text-red-50 placeholder:text-red-300/40 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
-              />
-            </label>
-          )}
-        </div>
-      )}
-    </li>
-  );
-}
-
-/* ── Sector ─────────────────────────────────────────────────────────────── */
-
-function Sector({ sector, property, onPatch }) {
-  const stats = sectorStats(property, sector);
-  const Icon = SECTOR_ICONS[sector.icon];
-  const complete = stats.verified === stats.total;
-
-  return (
-    <section style={{ '--accent': sector.accent }} className="mb-3">
-      {/* Locked header: the operative always knows which room they are in. */}
-      <header className="sticky top-0 z-20 flex items-center gap-2.5 border-y border-slate-800 bg-slate-900/95 px-3 py-2.5 backdrop-blur-md">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[rgb(var(--accent)/0.14)] text-[rgb(var(--accent))]">
-          {Icon && <Icon size={17} strokeWidth={2.2} aria-hidden="true" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-bold uppercase tracking-[0.1em] text-slate-100">
-            {sector.name}
-          </h2>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-            {sector.zone}
-          </p>
-        </div>
-        {stats.deficit > 0 && (
-          <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-red-400">
-            {stats.deficit} DEF
-          </span>
-        )}
-        <span
-          className={[
-            'rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums',
-            complete
-              ? 'border-green-500/40 bg-green-500/10 text-green-400'
-              : 'border-slate-700 bg-slate-950 text-slate-400',
-          ].join(' ')}
-        >
-          {stats.verified}/{stats.total}
-        </span>
-      </header>
-
-      <ul className="border-b border-slate-800 bg-slate-900">
-        {sector.items.map((item) => (
-          <AssetRow
-            key={item.id}
-            item={item}
-            state={getItem(property, item.id)}
-            onPatch={(patch) => onPatch(item.id, patch)}
-          />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/* ── Modal ──────────────────────────────────────────────────────────────── */
-
-function Modal({ title, tone = 'slate', onClose, children, bodyClass = 'p-5', wide = false }) {
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className={[
-          'w-full overflow-hidden rounded-t-2xl border bg-slate-900 shadow-2xl sm:rounded-2xl',
-          wide ? 'max-w-lg' : 'max-w-md',
-          tone === 'danger' ? 'border-red-500/40' : 'border-slate-700',
-        ].join(' ')}
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <div className={`flex items-start justify-between gap-3 ${bodyClass === 'p-5' ? 'px-5 pb-4 pt-5' : 'border-b border-slate-800 px-4 py-3.5'}`}>
-          <h2
-            className={[
-              'text-base font-bold uppercase tracking-[0.1em]',
-              tone === 'danger' ? 'text-red-400' : 'text-slate-100',
-            ].join(' ')}
-          >
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-800 hover:text-slate-200"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
-        <div className={bodyClass === 'p-5' ? 'px-5 pb-5' : ''}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-const btn = {
-  primary:
-    'flex-1 rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold uppercase tracking-wider text-slate-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500',
-  danger:
-    'flex-1 rounded-lg bg-red-600 px-4 py-3 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500',
-  ghost:
-    'rounded-lg border border-slate-700 px-4 py-3 text-sm font-bold uppercase tracking-wider text-slate-300 transition-colors hover:bg-slate-800',
-};
-
-const input =
-  'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-3 text-base text-slate-100 placeholder:text-slate-600 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400';
-
-/* A destructive action is only unlocked by typing the exact keyword. */
-function ConfirmPhrase({ phrase, prompt, action, onConfirm, onClose }) {
-  const [typed, setTyped] = useState('');
-  const armed = typed.trim().toUpperCase() === phrase;
-  return (
-    <>
-      <div className="mb-4 space-y-2 text-sm leading-relaxed text-slate-300">{prompt}</div>
-      <label className="mb-4 block">
-        <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-          Type <span className="font-bold text-red-400">{phrase}</span> to authorize
-        </span>
-        <input
-          autoFocus
-          type="text"
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && armed && onConfirm()}
-          placeholder={phrase}
-          spellCheck={false}
-          autoCapitalize="characters"
-          className={`${input} font-mono tracking-[0.2em]`}
-        />
-      </label>
-      <div className="flex gap-2">
-        <button type="button" onClick={onClose} className={btn.ghost}>
-          Cancel
-        </button>
-        <button type="button" disabled={!armed} onClick={onConfirm} className={btn.danger}>
-          {action}
-        </button>
-      </div>
-    </>
-  );
-}
-
-/* ── Property roster ────────────────────────────────────────────────────── */
-
-/* One row per property: name, live progress, deficit count, staleness, and an
- * overflow strip for rename / duplicate / delete. Replaces the native <select>,
- * which could only ever show a name — useless for deciding which of eleven
- * units still needs a walkthrough. */
-function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename, onDuplicate, onDelete, rowRef }) {
-  const stats = computeStats(property);
-  const phase = phaseOf(stats);
-  const [renaming, setRenaming] = useState(false);
-  const [draft, setDraft] = useState(property.name);
-
-  const commitRename = () => {
-    const next = draft.trim();
-    if (next && next !== property.name) onRename(next);
-    setRenaming(false);
-  };
-
-  if (renaming) {
-    return (
-      <li className="border-b border-slate-800 bg-slate-950/60 p-3">
-        <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-          Rename property
-        </label>
-        <div className="flex gap-2">
-          <input
-            autoFocus
-            type="text"
-            value={draft}
-            maxLength={60}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') { setDraft(property.name); setRenaming(false); }
-            }}
-            className={input}
-          />
-          <button
-            type="button"
-            onClick={commitRename}
-            aria-label="Save name"
-            className="grid w-12 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-950 hover:bg-white"
-          >
-            <Check size={18} strokeWidth={3} aria-hidden="true" />
-          </button>
-        </div>
-      </li>
-    );
-  }
-
-  return (
-    <li ref={rowRef} className={`border-b border-slate-800 ${active ? 'bg-slate-800/40' : ''}`}>
-      <div className="flex items-stretch">
-        <button
-          type="button"
-          onClick={onSelect}
-          style={{ '--phase': phase.rgb }}
-          aria-label={`Switch to ${property.name} — ${stats.percent}% verified, ${stats.deficit} deficit`}
-          aria-current={active ? 'true' : undefined}
-          className="min-w-0 flex-1 px-3 py-3 text-left"
-        >
-          <div className="flex items-center gap-2">
-            {active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" aria-hidden="true" />}
-            <span className={`truncate text-[15px] font-semibold ${active ? 'text-white' : 'text-slate-200'}`}>
-              {property.name}
-            </span>
-            <span className="ml-auto shrink-0 font-mono text-[11px] font-bold tabular-nums text-[rgb(var(--phase))]">
-              {stats.percent}%
-            </span>
-          </div>
-          <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full rounded-full bg-[rgb(var(--phase))]" style={{ width: `${stats.percent}%` }} />
-          </div>
-          <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-slate-500">
-            {stats.verified}/{stats.total} verified
-            {stats.deficit > 0 && <span className="text-red-400"> · {stats.deficit} deficit</span>}
-            <span className="text-slate-600"> · {relativeTime(property.updatedAt)}</span>
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={onExpand}
-          aria-expanded={expanded}
-          aria-label={`Actions for ${property.name}`}
-          className="grid w-11 shrink-0 place-items-center border-l border-slate-800/70 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
-        >
-          <Ellipsis size={18} aria-hidden="true" />
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="grid grid-cols-3 gap-2 px-3 pb-3">
-          {[
-            { label: 'Rename', icon: Pencil, onClick: () => { setDraft(property.name); setRenaming(true); } },
-            { label: 'Duplicate', icon: Copy, onClick: onDuplicate },
-            { label: 'Delete', icon: Trash2, onClick: onDelete, danger: true },
-          ].map(({ label, icon: Icon, onClick, danger }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={onClick}
-              className={[
-                'flex flex-col items-center gap-1 rounded-lg border py-2.5 font-mono text-[10px] uppercase tracking-wider transition-colors',
-                danger
-                  ? 'border-red-500/40 text-red-400 hover:bg-red-950/40'
-                  : 'border-slate-700 text-slate-300 hover:bg-slate-800',
-              ].join(' ')}
-            >
-              <Icon size={15} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-    </li>
-  );
-}
-
-function PropertySheet({ properties, activeId, onClose, onSelect, onNew, onRename, onDuplicate, onDelete, onExportAll }) {
-  const [query, setQuery] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
-  const activeRef = useRef(null);
-
-  /* With a portfolio of a dozen units the active one can open below the fold,
-   * which reads as "my property is gone". Put it on screen immediately. */
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: 'nearest' });
-  }, []);
-
-  /* Search only earns its space once the roster outgrows a glance. */
-  const searchable = properties.length > 5;
-  const visible = query.trim()
-    ? properties.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : properties;
-
-  return (
-    <Modal title={`Properties · ${properties.length}`} onClose={onClose} bodyClass="p-0" wide>
-      {searchable && (
-        <div className="relative border-b border-slate-800 p-3">
-          <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter properties…"
-            aria-label="Filter properties"
-            className={`${input} pl-9`}
-          />
-        </div>
-      )}
-
-      <ul className="max-h-[45dvh] overflow-y-auto">
-        {visible.map((p) => (
-          <PropertyRow
-            key={p.id}
-            property={p}
-            active={p.id === activeId}
-            expanded={expandedId === p.id}
-            onSelect={() => onSelect(p.id)}
-            onExpand={() => setExpandedId(expandedId === p.id ? null : p.id)}
-            onRename={(name) => onRename(p.id, name)}
-            onDuplicate={() => onDuplicate(p.id)}
-            onDelete={() => onDelete(p.id)}
-            rowRef={p.id === activeId ? activeRef : undefined}
-          />
-        ))}
-        {!visible.length && (
-          <li className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-wider text-slate-500">
-            No property matches “{query}”
-          </li>
-        )}
-      </ul>
-
-      <div className="flex gap-2 border-t border-slate-800 p-3">
-        <button type="button" onClick={onNew} className={`${btn.primary} flex items-center justify-center gap-2`}>
-          <Plus size={17} strokeWidth={3} aria-hidden="true" />
-          New
-        </button>
-        <button
-          type="button"
-          onClick={onExportAll}
-          disabled={properties.length < 2}
-          aria-label={`Export all ${properties.length} properties to one CSV`}
-          className={`${btn.ghost} flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40`}
-        >
-          <Download size={16} aria-hidden="true" />
-          Export all
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-/* ── App ────────────────────────────────────────────────────────────────── */
+/* Second-pass views. An operative walks the unit once ticking things off, then
+ * wants "what's left" and "what's broken" without scrolling 69 rows. */
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'todo', label: 'To do' },
+  { key: 'deficit', label: 'Deficits' },
+];
 
 function App() {
   const [state, setState] = useState(loadState);
   const [modal, setModal] = useState(null); // { type, id? }
   const [newName, setNewName] = useState('');
-  const [toast, setToast] = useState(null);
+  const [toast, setToast] = useState(null); // { message, undo? }
   const [storageOK] = useState(probeStorage);
+  const [photosOK, setPhotosOK] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState({});
+  const [lightbox, setLightbox] = useState(null);
+  const [busyItemId, setBusyItemId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [storageBytes, setStorageBytes] = useState(0);
   const scrollRef = useRef(null);
+  const toastTimer = useRef(0);
+  /* Holds the previous state plus any blob cleanup a destructive action
+   * deferred, so Undo can put everything back. See runPendingCleanup(). */
+  const undoRef = useRef(null);
+
+  useEffect(() => {
+    photosAvailable().then(setPhotosOK);
+  }, []);
 
   /* Absolute persistence: every state transition is written through
    * synchronously after paint — no debounce, no unsaved window. */
@@ -594,14 +71,40 @@ function App() {
     state.properties.find((p) => p.id === state.activeId) || state.properties[0];
   const stats = useMemo(() => computeStats(property), [property]);
   const phase = phaseOf(stats);
+  const report = useMemo(() => deficitReport(property), [property]);
 
-  const toastTimer = useRef(0);
-  const flash = useCallback((message) => {
-    setToast(message);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2600);
+  /* --- toast + undo ------------------------------------------------------
+   * Destructive actions defer their blob deletes until the undo window shuts,
+   * so undoing a reset restores the photos too rather than a hollow shell. */
+  const runPendingCleanup = useCallback(() => {
+    const cleanup = undoRef.current?.cleanup;
+    undoRef.current = null;
+    if (cleanup) cleanup().catch(() => {});
   }, []);
 
+  const flash = useCallback(
+    (message, undoable = null) => {
+      runPendingCleanup();
+      if (undoable) undoRef.current = undoable;
+      setToast({ message, undo: Boolean(undoable) });
+      window.clearTimeout(toastTimer.current);
+      toastTimer.current = window.setTimeout(() => {
+        setToast(null);
+        runPendingCleanup();
+      }, undoable ? 7000 : 2600);
+    },
+    [runPendingCleanup]
+  );
+
+  const undo = useCallback(() => {
+    const snapshot = undoRef.current;
+    undoRef.current = null; // discard the deferred cleanup: the data lives on
+    window.clearTimeout(toastTimer.current);
+    setToast(null);
+    if (snapshot?.state) setState(snapshot.state);
+  }, []);
+
+  /* --- asset edits ------------------------------------------------------- */
   const patchItem = useCallback((itemId, patch) => {
     setState((prev) => {
       const now = new Date().toISOString();
@@ -622,6 +125,55 @@ function App() {
     });
   }, []);
 
+  const verifySector = (sector) => {
+    const pending = sector.items.filter((i) => getItem(property, i.id).status === PENDING);
+    if (!pending.length) return;
+    const snapshot = state;
+    const now = new Date().toISOString();
+    setState((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) => {
+        if (p.id !== prev.activeId) return p;
+        const items = { ...p.items };
+        for (const item of pending) {
+          items[item.id] = { ...EMPTY_ITEM, ...(items[item.id] || {}), status: VERIFIED, updatedAt: now };
+        }
+        return { ...p, items, updatedAt: now };
+      }),
+    }));
+    flash(`${pending.length} verified in ${sector.name}`, { state: snapshot });
+  };
+
+  /* --- photo evidence ---------------------------------------------------- */
+  const capturePhotos = async (itemId, files) => {
+    setBusyItemId(itemId);
+    const added = [];
+    try {
+      for (const file of files.slice(0, 6)) {
+        const record = await processCapture(file);
+        const id = newPhotoId();
+        await putPhoto(photoKey(property.id, itemId, id), record);
+        added.push(id);
+      }
+    } catch {
+      flash('Could not save that photo');
+    } finally {
+      setBusyItemId(null);
+    }
+    if (!added.length) return;
+    const existing = getItem(property, itemId).photos;
+    patchItem(itemId, { photos: [...existing, ...added].slice(0, 6) });
+    photoBytes().then(setStorageBytes).catch(() => {});
+  };
+
+  const removePhoto = async (itemId, photoId) => {
+    const existing = getItem(property, itemId).photos;
+    patchItem(itemId, { photos: existing.filter((id) => id !== photoId) });
+    await deletePhoto(photoKey(property.id, itemId, photoId)).catch(() => {});
+    setLightbox(null);
+  };
+
+  /* --- property lifecycle ------------------------------------------------ */
   const toTop = () => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   };
@@ -649,13 +201,21 @@ function App() {
     flash(`Renamed to ${name}`);
   };
 
-  const duplicateProperty = (id) => {
+  const duplicateProperty = async (id) => {
+    const source = state.properties.find((p) => p.id === id);
+    if (!source) return;
+    const copy = cloneProperty(source, `${source.name} (copy)`);
+    /* Photos are keyed by property, so a duplicate needs its own copies —
+     * otherwise deleting the original would blank the copy's evidence. */
+    try {
+      for (const { itemId, photoId } of photoManifest(source)) {
+        const record = await getPhoto(photoKey(source.id, itemId, photoId));
+        if (record) await putPhoto(photoKey(copy.id, itemId, photoId), record);
+      }
+    } catch {
+      /* An evidence copy that fails still leaves a usable checklist copy. */
+    }
     setState((prev) => {
-      const source = prev.properties.find((p) => p.id === id);
-      if (!source) return prev;
-      const copy = cloneProperty(source, `${source.name} (copy)`);
-      /* Slot the copy next to its original rather than at the end — a block of
-       * identical units should read as a block. */
       const at = prev.properties.findIndex((p) => p.id === id) + 1;
       const properties = [...prev.properties];
       properties.splice(at, 0, copy);
@@ -666,24 +226,8 @@ function App() {
     flash('Property duplicated with its audit data');
   };
 
-  const exportAll = () => {
-    downloadCSVAll(state.properties);
-    setModal(null);
-    flash(`Extracted ${state.properties.length} properties → CSV`);
-  };
-
-  const resetProperty = () => {
-    setState((prev) => ({
-      ...prev,
-      properties: prev.properties.map((p) =>
-        p.id === prev.activeId ? { ...p, items: {}, updatedAt: new Date().toISOString() } : p
-      ),
-    }));
-    setModal(null);
-    flash('Checklist wiped to zero');
-  };
-
   const deleteProperty = (id) => {
+    const snapshot = state;
     setState((prev) => {
       const remaining = prev.properties.filter((p) => p.id !== id);
       if (!remaining.length) return defaultState();
@@ -692,13 +236,170 @@ function App() {
       return { ...prev, activeId, properties: remaining };
     });
     setModal(null);
-    flash('Property profile purged');
+    flash('Property profile purged', {
+      state: snapshot,
+      cleanup: () => deletePhotosByPrefix(`${id}|`),
+    });
   };
 
-  const exportCSV = () => {
-    downloadCSV(property);
-    flash(`Extracted ${stats.total} rows → CSV`);
+  const resetProperty = () => {
+    const snapshot = state;
+    const id = property.id;
+    setState((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) =>
+        p.id === prev.activeId
+          ? { ...p, items: {}, signedOffBy: '', signedOffAt: null, updatedAt: new Date().toISOString() }
+          : p
+      ),
+    }));
+    setModal(null);
+    flash('Checklist wiped to zero', {
+      state: snapshot,
+      cleanup: () => deletePhotosByPrefix(`${id}|`),
+    });
   };
+
+  const signOff = (name) => {
+    setState((prev) => ({
+      ...prev,
+      auditor: name,
+      properties: prev.properties.map((p) =>
+        p.id === prev.activeId
+          ? { ...p, signedOffBy: name, signedOffAt: new Date().toISOString() }
+          : p
+      ),
+    }));
+  };
+
+  /* --- exports ----------------------------------------------------------- */
+  /* `signedBy` arrives straight from the sign-off field so the export carries
+   * the signature in the same gesture, without waiting for a state round trip. */
+  const signedProperty = (signedBy) =>
+    signedBy
+      ? { ...property, signedOffBy: signedBy, signedOffAt: new Date().toISOString() }
+      : property;
+
+  const exportCSV = (signedBy) => {
+    const target = signedProperty(signedBy);
+    downloadCSV(target);
+    flash(`Extracted ${stats.total} rows → ${csvFilename(target)}`);
+  };
+
+  const exportAll = () => {
+    downloadCSVAll(state.properties);
+    setModal(null);
+    flash(`Extracted ${state.properties.length} properties → CSV`);
+  };
+
+  const exportReport = async (signedBy) => {
+    setExporting(true);
+    const photoData = {};
+    try {
+      for (const line of report.lines) {
+        for (const photoId of line.photos) {
+          const rec = await getPhoto(photoKey(property.id, line.id, photoId));
+          if (rec?.full) photoData[photoId] = await blobToDataURL(rec.full);
+        }
+      }
+    } catch {
+      /* Ship the report without the images rather than not at all. */
+    }
+    const target = signedProperty(signedBy);
+    const html = buildReport(target, report, photoData);
+    downloadText(html, reportFilename(target), 'text/html');
+    setExporting(false);
+    setModal(null);
+    flash(`Report built — ${report.count} finding${report.count === 1 ? '' : 's'}`);
+  };
+
+  const exportBackup = async () => {
+    setExporting(true);
+    const photos = {};
+    try {
+      for (const [key, rec] of await allEntries()) {
+        if (!rec?.full) continue;
+        photos[key] = {
+          full: await blobToDataURL(rec.full),
+          thumb: rec.thumb ? await blobToDataURL(rec.thumb) : null,
+          createdAt: rec.createdAt,
+        };
+      }
+    } catch {
+      /* A checklist-only backup still beats no backup. */
+    }
+    downloadText(buildBackup(state, photos), backupFilename());
+    setExporting(false);
+    flash('Backup downloaded — store it somewhere off this device');
+  };
+
+  const applyBackup = async (parsed, mode) => {
+    const snapshot = state;
+    try {
+      if (mode === 'replace') await clearPhotos();
+      for (const [key, rec] of Object.entries(parsed.photos)) {
+        if (!rec?.full) continue;
+        await putPhoto(key, {
+          full: await dataURLToBlob(rec.full),
+          thumb: rec.thumb ? await dataURLToBlob(rec.thumb) : null,
+          createdAt: rec.createdAt,
+        });
+      }
+    } catch {
+      /* Restore the checklists even if the images could not be written. */
+    }
+    setState((prev) => {
+      const properties =
+        mode === 'replace' ? parsed.properties : [...prev.properties, ...parsed.properties];
+      return { ...prev, activeId: parsed.properties[0].id, properties };
+    });
+    setModal(null);
+    toTop();
+    flash(
+      `Restored ${parsed.properties.length} propert${parsed.properties.length === 1 ? 'y' : 'ies'}`,
+      { state: snapshot }
+    );
+  };
+
+  /* --- filtering + navigation -------------------------------------------- */
+  const q = query.trim().toLowerCase();
+  const visibleSectors = useMemo(() => {
+    if (filter === 'all' && !q) return SECTORS.map((sector) => ({ sector, items: sector.items }));
+    return SECTORS.map((sector) => ({
+      sector,
+      items: sector.items.filter((item) => {
+        if (q && !item.label.toLowerCase().includes(q)) return false;
+        const status = getItem(property, item.id).status;
+        if (filter === 'todo') return status === PENDING;
+        if (filter === 'deficit') return status === DEFICIT;
+        return true;
+      }),
+    })).filter(({ items }) => items.length);
+  }, [filter, q, property]);
+
+  const visibleCount = visibleSectors.reduce((n, { items }) => n + items.length, 0);
+
+  /* Resume where the walkthrough stopped instead of hunting for it. */
+  const jumpToNext = () => {
+    const next = SECTORS.flatMap((s) => s.items).find(
+      (item) => getItem(property, item.id).status === PENDING
+    );
+    if (!next) return flash('Nothing left unaudited');
+    setCollapsed((prev) => ({ ...prev, [SECTORS.find((s) => s.items.includes(next)).id]: false }));
+    requestAnimationFrame(() => {
+      document.getElementById(`row-${next.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  };
+
+  const openBackup = () => {
+    photoBytes().then(setStorageBytes).catch(() => {});
+    setModal({ type: 'backup' });
+  };
+
+  const photoCount = useMemo(
+    () => state.properties.reduce((n, p) => n + photoManifest(p).length, 0),
+    [state.properties]
+  );
 
   /* Mobile-first, but capped so the console reads as a device panel on a
    * tablet or desktop instead of a 2000px-wide row of stranded checkboxes. */
@@ -757,7 +458,7 @@ function App() {
         </div>
 
         {/* Metric validation */}
-        <div className="px-3 pb-3 pt-2.5">
+        <div className="px-3 pb-2.5 pt-2.5">
           <div className="mb-1.5 flex items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.14em]">
             <span className="text-slate-500">
               <span className="font-bold text-slate-200">{stats.verified}</span>
@@ -784,6 +485,89 @@ function App() {
             />
           </div>
         </div>
+
+        {/* Second-pass controls */}
+        <div className="flex items-center gap-1.5 px-3 pb-2.5">
+          <div className="flex rounded-lg border border-slate-800 bg-slate-950 p-0.5" role="tablist" aria-label="Filter assets">
+            {FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                onClick={() => setFilter(key)}
+                className={[
+                  'grid min-h-[38px] place-items-center whitespace-nowrap rounded-md px-3 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors',
+                  filter === key ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300',
+                ].join(' ')}
+              >
+                {label}
+                {key === 'deficit' && report.count > 0 && (
+                  <span className="ml-1 text-red-400">{report.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((v) => !v);
+              if (searchOpen) setQuery('');
+            }}
+            aria-label={searchOpen ? 'Close asset search' : 'Search assets'}
+            aria-pressed={searchOpen}
+            className={[
+              'grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition-colors',
+              searchOpen ? 'border-slate-500 bg-slate-800 text-slate-100' : 'border-slate-800 text-slate-500 hover:text-slate-300',
+            ].join(' ')}
+          >
+            <Search size={15} aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={jumpToNext}
+            aria-label="Jump to the next unaudited asset"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 transition-colors hover:border-slate-600 hover:text-slate-300"
+          >
+            <Crosshair size={15} aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setModal({ type: 'report' })}
+            aria-label="Open findings and export"
+            className="ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+          >
+            <ClipboardList size={15} aria-hidden="true" />
+            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.1em]">Findings</span>
+          </button>
+        </div>
+
+        {searchOpen && (
+          <div className="relative px-3 pb-2.5">
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find an asset…"
+              aria-label="Search assets by name"
+              className={`${input} py-2.5 pr-9`}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+                className="absolute right-5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-slate-500 hover:text-slate-200"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {/* ── Audit surface ──────────────────────────────────────────────── */}
@@ -795,9 +579,33 @@ function App() {
           </p>
         )}
 
-        {SECTORS.map((sector) => (
-          <Sector key={sector.id} sector={sector} property={property} onPatch={patchItem} />
+        {visibleSectors.map(({ sector, items }) => (
+          <Sector
+            key={sector.id}
+            sector={sector}
+            property={property}
+            items={items}
+            collapsed={Boolean(collapsed[sector.id])}
+            photosEnabled={photosOK}
+            busyItemId={busyItemId}
+            onPatch={patchItem}
+            onToggleCollapse={() =>
+              setCollapsed((prev) => ({ ...prev, [sector.id]: !prev[sector.id] }))
+            }
+            onVerifyAll={() => verifySector(sector)}
+            onCapture={capturePhotos}
+            onRemovePhoto={removePhoto}
+            onOpenPhoto={(itemId, label, photoIds, index) =>
+              setLightbox({ itemId, label, photoIds, index })
+            }
+          />
         ))}
+
+        {visibleCount === 0 && (
+          <p className="px-6 py-16 text-center font-mono text-[11px] uppercase leading-relaxed tracking-[0.14em] text-slate-600">
+            {q ? `Nothing matches “${query}”` : filter === 'todo' ? 'Every asset audited' : 'No deficits logged'}
+          </p>
+        )}
 
         <p className="px-4 pb-6 pt-1 text-center font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-slate-600">
           {stats.total} assets · {stats.pending} unaudited
@@ -817,8 +625,16 @@ function App() {
             onClick={exportCSV}
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-100 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-slate-950 transition-colors hover:bg-white active:scale-[0.98]"
           >
-            <Download size={17} strokeWidth={2.5} aria-hidden="true" />
+            <ClipboardList size={17} strokeWidth={2.5} aria-hidden="true" />
             Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={openBackup}
+            aria-label="Backup and restore"
+            className="grid w-[52px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+          >
+            <Database size={18} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -833,14 +649,33 @@ function App() {
 
       {/* ── Overlays ───────────────────────────────────────────────────── */}
       {toast && (
-        <div
-          role="status"
-          className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4"
-        >
-          <p className="rounded-full border border-slate-700 bg-slate-800/95 px-4 py-2 text-center font-mono text-[11px] uppercase tracking-wider text-slate-200 shadow-xl backdrop-blur">
-            {toast}
+        <div role="status" className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
+          <p className="flex items-center gap-3 rounded-full border border-slate-700 bg-slate-800/95 py-2 pl-4 pr-2 text-center font-mono text-[11px] uppercase tracking-wider text-slate-200 shadow-xl backdrop-blur">
+            <span className="min-w-0">{toast.message}</span>
+            {toast.undo && (
+              <button
+                type="button"
+                onClick={undo}
+                className="flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-3 py-1 font-bold text-slate-950 hover:bg-white"
+              >
+                <Undo2 size={12} strokeWidth={3} aria-hidden="true" />
+                Undo
+              </button>
+            )}
           </p>
         </div>
+      )}
+
+      {lightbox && (
+        <Lightbox
+          propertyId={property.id}
+          itemId={lightbox.itemId}
+          label={lightbox.label}
+          photoIds={lightbox.photoIds}
+          index={lightbox.index}
+          onIndex={(index) => setLightbox((prev) => ({ ...prev, index }))}
+          onClose={() => setLightbox(null)}
+        />
       )}
 
       {modal?.type === 'properties' && (
@@ -854,6 +689,33 @@ function App() {
           onDuplicate={duplicateProperty}
           onDelete={(id) => setModal({ type: 'delete', id })}
           onExportAll={exportAll}
+        />
+      )}
+
+      {modal?.type === 'report' && (
+        <ReportSheet
+          property={property}
+          auditor={state.auditor}
+          exporting={exporting}
+          onClose={() => setModal(null)}
+          onSignOff={signOff}
+          onExportCSV={exportCSV}
+          onExportReport={exportReport}
+        />
+      )}
+
+      {modal?.type === 'backup' && (
+        <BackupSheet
+          propertyCount={state.properties.length}
+          photoCount={photoCount}
+          storageBytes={storageBytes}
+          busy={exporting}
+          onClose={() => setModal(null)}
+          onExport={exportBackup}
+          onImport={{
+            parse: async (file) => parseBackup(await file.text()),
+            apply: applyBackup,
+          }}
         />
       )}
 
@@ -899,12 +761,12 @@ function App() {
             prompt={
               <>
                 <p>
-                  This clears every verification, quantity, serial number and deficit note on{' '}
-                  <span className="font-mono font-bold text-slate-100">{property.name}</span>.
+                  This clears every verification, quantity, serial number, photo and deficit note
+                  on <span className="font-mono font-bold text-slate-100">{property.name}</span>.
                 </p>
                 <p className="text-slate-400">
                   {stats.verified} verified and {stats.deficit} deficit records will be destroyed.
-                  Other properties are untouched. This cannot be undone.
+                  Other properties are untouched.
                 </p>
               </>
             }
@@ -948,7 +810,7 @@ function App() {
                     {lead}
                     <p className="text-slate-400">
                       {targetStats.verified} verified and {targetStats.deficit} deficit records will
-                      be destroyed. This cannot be undone.
+                      be destroyed.
                     </p>
                     {tail}
                   </>
@@ -964,11 +826,7 @@ function App() {
                   <button type="button" onClick={() => setModal(null)} className={btn.ghost}>
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteProperty(target.id)}
-                    className={btn.danger}
-                  >
+                  <button type="button" onClick={() => deleteProperty(target.id)} className={btn.danger}>
                     Purge profile
                   </button>
                 </div>
