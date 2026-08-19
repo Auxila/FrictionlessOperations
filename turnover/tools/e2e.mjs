@@ -10,8 +10,6 @@
  * ========================================================================= */
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdtempSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -19,7 +17,6 @@ import { chromium } from 'playwright';
 const PORT = Number(process.env.PORT) || 8099;
 const BASE = `http://localhost:${PORT}/`;
 const SHOTS = process.env.SHOTS || mkdtempSync(join(tmpdir(), 'turnover-shots-'));
-const FIXTURE = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures/evidence.jpg');
 
 const results = [];
 const check = (name, pass, detail = '') => {
@@ -94,35 +91,30 @@ check('deficit note revealed on uncheck', (await page.locator('#k-refrigerator-n
 await page.fill('#k-refrigerator-note', 'Door seal torn; ice maker dead');
 
 /* flag button as the direct path */
-const forks = page.locator('li:has(#u-forks-qty), li:has-text("Forks")').first();
 await page.getByLabel('Flag deficit on Forks').click();
 check('flag button marks deficit', (await page.locator('#u-forks-note').count()) === 1);
 await page.fill('#u-forks-note', 'Missing 2 forks');
-await page.fill('#u-forks-qty', '6');
 check('deficit counter in header', (await page.getByText('2 deficit').count()) === 1);
 
 await page.screenshot({ path: SHOTS + '/01-audit.png' });
 
-/* ── disclosure: a plain tick must not unfurl an empty form ───────────── */
-const mugs = page.locator('li:has-text("Coffee Mugs")').first();
-await mugs.locator('[role=checkbox]').click();
-check('verified qty-only row stays collapsed', (await page.locator('#d-coffee-mugs-qty').count()) === 0);
-await page.getByLabel('Show capture fields for Coffee Mugs').click();
-check('chevron opens capture fields', (await page.locator('#d-coffee-mugs-qty').count()) === 1);
-await page.fill('#d-coffee-mugs-qty', '8');
-await page.getByLabel('Hide capture fields for Coffee Mugs').click();
-check('chevron closes capture fields', (await page.locator('#d-coffee-mugs-qty').count()) === 0);
-check('collapsed qty shown as badge', (await mugs.getByText('×8').count()) === 1);
+/* ── disclosure: a plain tick must not unfurl a form ──────────────────── */
+await page.locator('#row-d-coffee-mugs [role=checkbox]').click();
+check('a plain tick leaves the row collapsed',
+      (await page.locator('#d-coffee-mugs-expected').count()) === 0);
+await page.getByLabel('Show details for Coffee Mugs').click();
+check('chevron opens the detail panel',
+      (await page.locator('#d-coffee-mugs-expected').count()) === 1);
+await page.getByLabel('Hide details for Coffee Mugs').click();
+check('chevron closes the detail panel',
+      (await page.locator('#d-coffee-mugs-expected').count()) === 0);
 check('collapsed deficit note previews',
-      (await page.locator('li:has-text("Forks")').first().getByText('Missing 2 forks').count()) >= 1);
+      (await page.locator('#row-u-forks').getByText('Missing 2 forks').count()) >= 1);
 
 /* ── persistence across reload ────────────────────────────────────────── */
 await page.reload({ waitUntil: 'networkidle' });
 check('note survives reload', (await page.inputValue('#k-refrigerator-note')) === 'Door seal torn; ice maker dead');
 check('serial survives reload', (await page.inputValue('#k-refrigerator-serial')) === '904KRZP1J742');
-check('qty survives reload', (await page.inputValue('#u-forks-qty')) === '6');
-check('collapsed qty survives reload',
-      (await page.locator('li:has-text("Coffee Mugs")').first().getByText('×8').count()) === 1);
 check('deficit status survives reload',
       (await page.locator('#k-refrigerator-note').count()) === 1);
 
@@ -257,7 +249,7 @@ await page.screenshot({ path: SHOTS + '/04-verified.png' });
 /* ── CSV export (real download, real CSP) ─────────────────────────────── */
 const dl = await Promise.all([
   page.waitForEvent('download', { timeout: 8000 }),
-  page.getByRole('button', { name: 'Export CSV' }).click(),
+  page.getByLabel('Export this property to CSV').click(),
 ]).then((r) => r[0]).catch((e) => null);
 check('CSV download fires', !!dl, dl ? await dl.suggestedFilename() : 'no download event');
 if (dl) {
@@ -306,59 +298,65 @@ await ctx.setOffline(false);
 check('no page errors overall', errors.length === 0, errors.slice(0, 3).join(' / '));
 
 
-/* ══ 1b. Evidence, second-pass views, and undo ═════════════════════════ */
-console.log('\nevidence + audit ergonomics');
+/* ══ 1b. Par levels, counting, and audit ergonomics ════════════════════ */
+console.log('\npar levels + audit ergonomics');
 {
   const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, acceptDownloads: true });
   const pg = await c.newPage();
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto(BASE, { waitUntil: 'networkidle' });
-  await pg.waitForTimeout(400);
+  await pg.waitForTimeout(300);
 
-  /* --- photo evidence on a deficit --- */
-  await pg.getByLabel('Flag deficit on Grill').click();
-  await pg.fill('#p-grill-note', 'Firebox rusted through');
-  await pg.fill('#p-grill-cost', '240');
-  await pg.locator('#row-p-grill input[type=file]').setInputFiles(FIXTURE);
-  await pg.waitForTimeout(900);
-  const thumbs = pg.locator('#row-p-grill img');
-  check('photo attaches to the asset', (await thumbs.count()) === 1);
+  /* --- a par level turns a tick-box row into a counter --- */
+  check('no counter before a par is set',
+        (await pg.locator('#row-u-forks input[aria-label^="Counted"]').count()) === 0);
+  await pg.getByLabel('Show details for Forks').click();
+  await pg.fill('#u-forks-expected', '12');
+  await pg.waitForTimeout(200);
+  const counter = pg.locator('#row-u-forks input[aria-label^="Counted"]');
+  check('setting a par reveals the counter', (await counter.count()) === 1);
+  check('setting a par alone does not mark the asset audited',
+        (await pg.locator('#row-u-forks [role=checkbox][aria-checked=false]').count()) === 1);
 
-  /* The whole point of the two-store split: bytes in IndexedDB, not in the
-     5 MB localStorage bucket that holds the audit. */
-  const sizes = await pg.evaluate(async () => {
-    const raw = localStorage.getItem('fo.turnover.matrix.v1');
-    const db = await new Promise((res) => {
-      const r = indexedDB.open('fo.turnover.photos', 1);
-      r.onsuccess = () => res(r.result);
-    });
-    const recs = await new Promise((res) => {
-      const req = db.transaction('photos').objectStore('photos').getAll();
-      req.onsuccess = () => res(req.result);
-    });
-    return {
-      localStorage: raw.length,
-      idbBytes: recs.reduce((n, r) => n + r.full.size + r.thumb.size, 0),
-      fullSize: recs[0]?.full?.size ?? 0,
-    };
-  });
-  check('image bytes stay out of localStorage', sizes.localStorage < 4000, `${sizes.localStorage} chars`);
-  check('image is downscaled on capture', sizes.fullSize > 0 && sizes.fullSize < 400_000, `${sizes.fullSize} bytes`);
+  /* --- counting short auto-flags the deficit, no typing --- */
+  for (let i = 0; i < 10; i += 1) await pg.getByLabel('One more Forks').click();
+  await pg.waitForTimeout(250);
+  check('stepper counts up', (await counter.inputValue()) === '10');
+  check('short count auto-flags a deficit',
+        (await pg.locator('#row-u-forks [role=checkbox][aria-checked=mixed]').count()) === 1);
+  check('shortfall is stated for the operative',
+        (await pg.locator('#row-u-forks').getByText('short 2').count()) === 1);
 
-  await pg.screenshot({ path: SHOTS + '/12-evidence.png' });
+  /* --- reaching par auto-verifies --- */
+  await pg.getByLabel('One more Forks').click();
+  await pg.getByLabel('One more Forks').click();
+  await pg.waitForTimeout(250);
+  check('reaching par auto-verifies',
+        (await pg.locator('#row-u-forks [role=checkbox][aria-checked=true]').count()) === 1);
+  check('complete is stated', (await pg.locator('#row-u-forks').getByText('complete').count()) === 1);
 
-  /* --- lightbox --- */
-  await pg.getByLabel(/^View photo 1 of 1 for Grill/).click();
-  await pg.waitForTimeout(400);
-  check('lightbox opens the full image', (await pg.locator('[role=dialog] img').count()) === 1);
-  await pg.getByLabel('Close photo').click();
+  /* --- direct entry for large counts --- */
+  await pg.getByLabel('Show details for Hangers').click();
+  await pg.fill('#b-hangers-expected', '30');
+  await pg.waitForTimeout(150);
+  await pg.locator('#row-b-hangers input[aria-label^="Counted"]').fill('24');
+  await pg.waitForTimeout(250);
+  check('typing a count works for large numbers',
+        (await pg.locator('#row-b-hangers').getByText('short 6').count()) === 1);
+  check('minus steps back down', await (async () => {
+    await pg.getByLabel('One fewer Hangers').click();
+    await pg.waitForTimeout(200);
+    return (await pg.locator('#row-b-hangers input[aria-label^="Counted"]').inputValue()) === '23';
+  })());
 
-  /* --- photo survives a reload (IndexedDB round trip) --- */
+  await pg.screenshot({ path: SHOTS + '/12-counting.png' });
+
+  /* --- counts survive a reload --- */
   await pg.reload({ waitUntil: 'networkidle' });
-  await pg.waitForTimeout(700);
-  check('photo survives a reload', (await pg.locator('#row-p-grill img').count()) === 1);
-  check('replacement cost survives a reload', (await pg.inputValue('#p-grill-cost')) === '240');
+  await pg.waitForTimeout(400);
+  check('par and count survive a reload',
+        (await pg.locator('#row-u-forks input[aria-label^="Counted"]').inputValue()) === '12');
 
   /* --- bulk verify a whole room, then undo it --- */
   await pg.getByLabel(/^Verify all 5 remaining assets in Bathroom Hardware/).click();
@@ -371,14 +369,17 @@ console.log('\nevidence + audit ergonomics');
         (await pg.locator('#row-ba-hair-dryer [role=checkbox][aria-checked=false]').count()) === 1);
 
   /* --- filters --- */
+  await pg.getByLabel('Flag deficit on Grill').click();
+  await pg.fill('#p-grill-note', 'Firebox rusted through');
+  await pg.fill('#p-grill-cost', '240');
   await pg.getByRole('tab', { name: /Deficits/ }).click();
-  await pg.waitForTimeout(200);
-  const deficitRows = await pg.locator('li[id^=row-]').count();
-  check('deficit filter shows only findings', deficitRows === 1, `${deficitRows} rows`);
+  await pg.waitForTimeout(250);
+  check('deficit filter shows only findings',
+        (await pg.locator('li[id^=row-]').count()) === 2,
+        String(await pg.locator('li[id^=row-]').count()));
   await pg.getByRole('tab', { name: 'To do' }).click();
   await pg.waitForTimeout(200);
-  check('to-do filter hides the audited asset',
-        (await pg.locator('#row-p-grill').count()) === 0);
+  check('to-do filter hides audited assets', (await pg.locator('#row-p-grill').count()) === 0);
   await pg.getByRole('tab', { name: 'All' }).click();
 
   /* --- asset search --- */
@@ -392,19 +393,18 @@ console.log('\nevidence + audit ergonomics');
   /* --- jump to next unaudited --- */
   await pg.getByLabel('Jump to the next unaudited asset').click();
   await pg.waitForTimeout(600);
-  const jumped = await pg.evaluate(() => {
+  check('jump scrolls the next unaudited asset into view', await pg.evaluate(() => {
     const el = document.getElementById('row-k-refrigerator');
     const main = document.querySelector('main').getBoundingClientRect();
     const r = el.getBoundingClientRect();
     return r.top > main.top - 10 && r.bottom < main.bottom + 10;
-  });
-  check('jump scrolls the next unaudited asset into view', jumped);
+  }));
 
-  /* --- findings sheet, sign-off, and the HTML report --- */
-  await pg.getByLabel('Open findings and export').click();
+  /* --- findings, sign-off, report --- */
+  await pg.getByRole('button', { name: /^Findings/ }).click();
   await pg.waitForTimeout(200);
-  check('findings sheet totals the claim',
-        (await pg.getByText('$240.00').count()) >= 1);
+  check('findings sheet totals the claim', (await pg.getByText('$240.00').count()) >= 1);
+  check('findings sheet counts units short', (await pg.getByText('Units short').count()) === 1);
   await pg.fill('#signoff-name', 'J. Rivera');
   await pg.screenshot({ path: SHOTS + '/13-findings.png' });
   const rep = await Promise.all([
@@ -414,50 +414,76 @@ console.log('\nevidence + audit ergonomics');
   check('report downloads', !!rep, rep ? await rep.suggestedFilename() : 'no download');
   if (rep) {
     const html = readFileSync(await rep.path(), 'utf8');
-    check('report embeds the photo', html.includes('data:image/jpeg;base64,'));
-    check('report carries the finding and the claim',
+    check('report states the shortfall without anyone typing it',
+          html.includes('Short 7') && html.includes('counted 23 of 30'),
+          (/Short \d+ — counted \d+ of \d+/.exec(html) || ['not found'])[0]);
+    check('report carries the typed finding and the claim',
           html.includes('Firebox rusted through') && html.includes('$240.00'));
     check('report is signed', html.includes('J. Rivera'));
-    check('report is self-contained', !/<(script|link|iframe)\b/i.test(html));
+    check('report is self-contained', !/<(script|link|iframe|img)\b/i.test(html));
   }
 
-  /* --- backup round trip --- */
+  /* --- CSV carries the count columns --- */
+  const csvDl = await Promise.all([
+    pg.waitForEvent('download', { timeout: 8000 }),
+    pg.getByRole('button', { name: /^CSV/ }).click(),
+  ]).then((r) => r[0]).catch(() => null);
+  if (csvDl) {
+    const rows = readFileSync(await csvDl.path(), 'utf8').replace(/^\ufeff/, '').trim().split('\r\n');
+    check('CSV header carries Expected/Counted/Short',
+          rows[0].includes('"Expected Qty","Counted Qty","Short"'));
+    const hangers = rows.find((r) => r.includes('"Hangers"'));
+    check('CSV reports the shortfall', hangers.includes('"30","23","7"'), hangers?.slice(40, 90));
+  }
+
+  /* --- backup round trip (no photo store any more) --- */
   await pg.getByLabel('Backup and restore').click();
-  await pg.waitForTimeout(300);
+  await pg.waitForTimeout(200);
   const bk = await Promise.all([
-    pg.waitForEvent('download', { timeout: 15000 }),
+    pg.waitForEvent('download', { timeout: 10000 }),
     pg.getByRole('button', { name: /Download backup/ }).click(),
   ]).then((r) => r[0]).catch(() => null);
   check('backup downloads', !!bk, bk ? await bk.suggestedFilename() : 'no download');
   if (bk) {
     const backupPath = await bk.path();
-    const parsed = JSON.parse(readFileSync(backupPath, 'utf8'));
-    check('backup carries the photo bytes',
-          Object.values(parsed.photos)[0]?.full?.startsWith('data:image/jpeg'));
-
-    /* Wipe the device, then restore from the file. */
-    await pg.evaluate(async () => {
-      localStorage.clear();
-      await new Promise((res) => {
-        const r = indexedDB.deleteDatabase('fo.turnover.photos');
-        r.onsuccess = r.onerror = r.onblocked = () => res();
-      });
-    });
+    await pg.evaluate(() => localStorage.clear());
     await pg.reload({ waitUntil: 'networkidle' });
-    await pg.waitForTimeout(400);
-    check('device really was wiped', (await pg.locator('#row-p-grill img').count()) === 0);
-
+    await pg.waitForTimeout(300);
+    check('device really was wiped',
+          (await pg.locator('#row-u-forks input[aria-label^="Counted"]').count()) === 0);
     await pg.getByLabel('Backup and restore').click();
     await pg.setInputFiles('input[aria-label="Choose a backup file to restore"]', backupPath);
-    await pg.waitForTimeout(400);
+    await pg.waitForTimeout(300);
     await pg.getByRole('button', { name: 'Replace everything' }).click();
-    await pg.waitForTimeout(900);
-    check('restore brings the finding back',
-          (await pg.inputValue('#p-grill-note')) === 'Firebox rusted through');
-    check('restore brings the photo back', (await pg.locator('#row-p-grill img').count()) === 1);
+    await pg.waitForTimeout(500);
+    check('restore brings par levels and counts back',
+          (await pg.locator('#row-u-forks input[aria-label^="Counted"]').inputValue()) === '12');
   }
 
-  check('no page errors across the evidence flow', errs.length === 0, errs.slice(0, 2).join(' / '));
+  /* --- copy par levels across a portfolio --- */
+  await pg.getByLabel('Add property profile').click();
+  await pg.locator('input[maxlength="60"]').fill('Unit 02');
+  await pg.getByRole('button', { name: 'Provision' }).click();
+  await pg.waitForTimeout(200);
+  check('a new property starts with no par levels',
+        (await pg.locator('#row-u-forks input[aria-label^="Counted"]').count()) === 0);
+
+  await pg.getByLabel(/^Active property:/).click();
+  await pg.getByLabel(/^Actions for Unit 01/).click();
+  await pg.getByRole('button', { name: 'Copy counts' }).click();
+  await pg.waitForTimeout(200);
+  await pg.getByRole('checkbox', { name: 'Unit 02' }).click();
+  await pg.getByRole('button', { name: /^Copy to/ }).click();
+  await pg.waitForTimeout(400);
+  check('copied par levels arrive on the target',
+        (await pg.locator('#row-u-forks input[aria-label^="Counted"]').count()) === 1);
+  check('copying pars does not copy the counts',
+        (await pg.locator('#row-u-forks input[aria-label^="Counted"]').inputValue()) === '');
+  check('copying pars leaves the target unaudited',
+        (await pg.getByText('Offline', { exact: true }).count()) === 1);
+  await pg.screenshot({ path: SHOTS + '/14-copy-counts.png' });
+
+  check('no page errors across the counting flow', errs.length === 0, errs.slice(0, 2).join(' / '));
   await c.close();
 }
 
@@ -482,6 +508,28 @@ for (const [label, w, h] of [['iPhone SE 320', 320, 568], ['iPhone 14 390', 390,
     vh: window.innerHeight,
   }));
   check(`${label}: 100dvh shell fills the viewport`, Math.abs(fit.h - fit.vh) <= 1, JSON.stringify(fit));
+
+  /* Flex children shrink rather than overflow the document, so a toolbar that
+     does not fit reads as "everything squeezed" instead of a scrollbar — the
+     horizontal-overflow check above cannot see it. Measure intrinsic width. */
+  const crowded = await p.evaluate(() => {
+    const rows = [
+      document.querySelector('[role=tablist]')?.parentElement,
+      document.querySelector('main').parentElement.lastElementChild.firstElementChild,
+    ].filter(Boolean);
+    return rows
+      .map((row) => {
+        const style = getComputedStyle(row);
+        const gaps = (parseFloat(style.columnGap) || 0) * (row.children.length - 1);
+        const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+        const needed =
+          [...row.children].reduce((n, el) => n + el.getBoundingClientRect().width, 0) + gaps + pad;
+        return { needed: Math.round(needed), have: Math.round(row.getBoundingClientRect().width) };
+      })
+      .filter((r) => r.needed > r.have + 1);
+  });
+  check(`${label}: control rows fit without squeezing`, crowded.length === 0,
+        crowded.map((r) => `${r.needed}>${r.have}`).join(', '));
 
   const tiny = await p.evaluate(() =>
     [...document.querySelectorAll('button, select, input, textarea')]

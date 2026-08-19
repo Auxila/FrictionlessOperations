@@ -3,12 +3,11 @@
  * ========================================================================= */
 
 import React, { useState } from 'react';
-import { AlertTriangle, Camera, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
 
 import { FIELD_LABELS } from '../inventory.js';
-import { DEFICIT, PENDING, VERIFIED } from '../store.js';
+import { DEFICIT, PENDING, VERIFIED, hasPar, parseCount, shortfall } from '../store.js';
 import { Field } from '../ui.jsx';
-import { PhotoStrip } from './PhotoStrip.jsx';
 
 /* Status advances on a single tap: unengaged -> verified -> deficit -> unengaged.
  * Un-checking a verified asset therefore lands on DEFICIT, which is what
@@ -50,23 +49,72 @@ function StatusBox({ status, onClick, label }) {
   );
 }
 
-export function AssetRow({
-  item, state, propertyId, photosEnabled, busyPhotos,
-  onPatch, onCapture, onRemovePhoto, onOpenPhoto,
-}) {
+/* The counter gets its own line rather than squeezing into the main row: at
+ * 320px a stepper beside the label leaves nothing for the label, and counting
+ * is the primary action on these assets, not a secondary one. */
+function CountRow({ item, state, onCount }) {
+  const expected = parseCount(state.expected) || 0;
+  const counted = parseCount(state.counted);
+  const short = shortfall(state);
+  const step = (delta) => onCount(String(Math.max(0, (counted ?? 0) + delta)));
+
+  return (
+    <div className="flex items-center gap-1.5 pb-3 pl-14 pr-3">
+      <button
+        type="button"
+        onClick={() => step(-1)}
+        disabled={!counted}
+        aria-label={`One fewer ${item.label}`}
+        className="grid h-10 w-11 shrink-0 place-items-center rounded-l-lg border border-slate-700 bg-slate-950 text-slate-300 transition-colors hover:bg-slate-800 disabled:text-slate-700"
+      >
+        <Minus size={17} strokeWidth={2.6} aria-hidden="true" />
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={state.counted}
+        onChange={(e) => onCount(e.target.value.replace(/[^0-9]/g, ''))}
+        aria-label={`Counted ${item.label}, expected ${expected}`}
+        placeholder="0"
+        className="-mx-1.5 h-10 w-14 shrink-0 border-y border-slate-700 bg-slate-950 text-center font-mono text-[15px] font-bold text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+      <button
+        type="button"
+        onClick={() => step(1)}
+        aria-label={`One more ${item.label}`}
+        className="grid h-10 w-11 shrink-0 place-items-center rounded-r-lg border border-slate-700 bg-slate-950 text-slate-300 transition-colors hover:bg-slate-800"
+      >
+        <Plus size={17} strokeWidth={2.6} aria-hidden="true" />
+      </button>
+
+      <span className="ml-2 min-w-0 font-mono text-[11px] uppercase tracking-[0.1em]">
+        <span className="text-slate-500">of {expected}</span>
+        {short === null ? (
+          <span className="ml-2 text-slate-600">uncounted</span>
+        ) : short > 0 ? (
+          <span className="ml-2 font-bold text-red-400">short {short}</span>
+        ) : (
+          <span className="ml-2 font-bold text-green-400">complete</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+export function AssetRow({ item, state, onPatch }) {
   const verified = state.status === VERIFIED;
   const deficit = state.status === DEFICIT;
-  const engaged = state.status !== PENDING;
+  const counted = hasPar(state);
   const set = (key) => (value) => onPatch({ [key]: value });
 
-  const capturable = Boolean(item.qty || item.condition || item.fields || photosEnabled);
   /* Ticking "present" should cost one tap, so the capture panel only opens by
-   * itself where the data is the point: a deficit needs its note and evidence,
-   * and the appliances exist in the checklist to have their serials read off.
-   * Anything else is one chevron away. A manual toggle wins over the default. */
+   * itself where the data is the point: a deficit needs its note, and the
+   * appliances exist in the checklist to have their serials read off.
+   * Everything else — par levels included — is one chevron away. */
   const autoOpen = deficit || (verified && Boolean(item.fields));
   const [override, setOverride] = useState(null);
-  const open = engaged && (override ?? autoOpen);
+  const open = override ?? autoOpen;
+  const short = shortfall(state);
 
   return (
     <li
@@ -105,37 +153,18 @@ export function AssetRow({
           )}
         </button>
 
-        {!open && (
-          <span className="flex shrink-0 items-center gap-1">
-            {state.qty ? (
-              <span className="rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 font-mono text-[11px] text-slate-400">
-                ×{state.qty}
-              </span>
-            ) : null}
-            {state.photos.length > 0 && (
-              <span
-                aria-label={`${state.photos.length} photo${state.photos.length > 1 ? 's' : ''} attached`}
-                className="flex items-center gap-0.5 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 font-mono text-[11px] text-slate-400"
-              >
-                <Camera size={10} strokeWidth={2.4} aria-hidden="true" />
-                {state.photos.length}
-              </span>
-            )}
-          </span>
-        )}
-
-        {engaged && capturable && (
-          <button
-            type="button"
-            onClick={() => setOverride(!open)}
-            aria-expanded={open}
-            aria-controls={`${item.id}-capture`}
-            aria-label={`${open ? 'Hide' : 'Show'} capture fields for ${item.label}`}
-            className="grid h-11 w-8 shrink-0 place-items-center rounded-md text-slate-500 transition-colors hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70"
-          >
-            {open ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-          </button>
-        )}
+        {/* Always reachable: the par level is set in here, and you set that
+            before the asset has been audited, not after. */}
+        <button
+          type="button"
+          onClick={() => setOverride(!open)}
+          aria-expanded={open}
+          aria-controls={`${item.id}-capture`}
+          aria-label={`${open ? 'Hide' : 'Show'} details for ${item.label}`}
+          className="grid h-11 w-8 shrink-0 place-items-center rounded-md text-slate-500 transition-colors hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70"
+        >
+          {open ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+        </button>
 
         <button
           type="button"
@@ -152,24 +181,36 @@ export function AssetRow({
         </button>
       </div>
 
+      {counted && <CountRow item={item} state={state} onCount={set('counted')} />}
+
       {/* A collapsed deficit still has to read at a glance during a walkthrough. */}
       {deficit && !open && state.note && (
         <p className="truncate px-3 pb-2.5 pl-14 font-mono text-[11px] text-red-400/80">{state.note}</p>
       )}
 
-      {/* Capture panel. The deficit note is gated on DEFICIT specifically —
-          that is the "hidden field" reveal. */}
       {open && (
         <div id={`${item.id}-capture`} className="grid grid-cols-2 gap-2.5 px-3 pb-3.5 pl-14">
-          {item.qty && (
+          {/* Par level. Setting it turns the row into a counter, which is what
+              makes the checklist modular per unit. */}
+          <Field
+            id={`${item.id}-expected`}
+            label="Expected qty"
+            mono
+            inputMode="numeric"
+            placeholder="—"
+            value={state.expected}
+            onChange={(v) => set('expected')(v.replace(/[^0-9]/g, ''))}
+          />
+          {!counted && (
             <Field
-              id={`${item.id}-qty`} label="Quantity" mono inputMode="numeric" placeholder="0"
-              value={state.qty} onChange={set('qty')}
+              id={`${item.id}-counted`} label="Counted" mono inputMode="numeric" placeholder="—"
+              value={state.counted}
+              onChange={(v) => set('counted')(v.replace(/[^0-9]/g, ''))}
             />
           )}
           {item.condition && (
             <Field
-              id={`${item.id}-condition`} label="Condition" wide={!item.qty}
+              id={`${item.id}-condition`} label="Condition" wide={counted}
               placeholder="Rust, stains, wear…"
               value={state.condition} onChange={set('condition')}
             />
@@ -199,7 +240,11 @@ export function AssetRow({
                   rows={2}
                   value={state.note}
                   onChange={(e) => onPatch({ note: e.target.value })}
-                  placeholder="e.g. Missing 2 forks / Stove scratched on left burner"
+                  placeholder={
+                    short > 0
+                      ? `Short ${short} already recorded — add detail if useful`
+                      : 'e.g. Stove scratched on left burner'
+                  }
                   className="w-full resize-y rounded-md border border-red-500/40 bg-red-950/30 px-3 py-2.5 text-sm text-red-50 placeholder:text-red-300/40 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
                 />
               </label>
@@ -210,19 +255,6 @@ export function AssetRow({
                 placeholder="0.00" value={state.cost} onChange={set('cost')}
               />
             </>
-          )}
-
-          {photosEnabled && (
-            <PhotoStrip
-              propertyId={propertyId}
-              itemId={item.id}
-              label={item.label}
-              photoIds={state.photos}
-              busy={busyPhotos}
-              onCapture={(files) => onCapture(item.id, files)}
-              onRemove={(photoId) => onRemovePhoto(item.id, photoId)}
-              onOpen={(index) => onOpenPhoto(item.id, item.label, state.photos, index)}
-            />
           )}
         </div>
       )}

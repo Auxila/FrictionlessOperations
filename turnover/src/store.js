@@ -28,7 +28,8 @@ export const EMPTY_ITEM = {
   serial: '',
   condition: '',
   cost: '',      // replacement value, drives the claim total
-  photos: [],    // manifest only — the image bytes live in IndexedDB
+  expected: '',  // par level — how many this unit is supposed to have
+  counted: '',   // what the operative actually found
   updatedAt: null,
 };
 
@@ -100,7 +101,9 @@ function sanitizeItem(raw) {
     serial: str(raw.serial),
     condition: str(raw.condition),
     cost: str(raw.cost),
-    photos: Array.isArray(raw.photos) ? raw.photos.filter((id) => typeof id === 'string') : [],
+    expected: str(raw.expected),
+    /* `qty` was the pre-par-level field name; carry old saves across. */
+    counted: str(raw.counted) || str(raw.qty),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
   };
   return isBlank(item) ? null : item;
@@ -110,8 +113,8 @@ function sanitizeItem(raw) {
 export function isBlank(item) {
   return (
     item.status === PENDING &&
-    !item.note && !item.qty && !item.brand && !item.model && !item.serial &&
-    !item.condition && !item.cost && !item.photos?.length
+    !item.note && !item.brand && !item.model && !item.serial &&
+    !item.condition && !item.cost && !item.expected && !item.counted
   );
 }
 
@@ -219,27 +222,59 @@ export function sectorStats(property, sector) {
 export function deficitReport(property) {
   const lines = [];
   let claim = 0;
-  let photoCount = 0;
+  let shortUnits = 0;
   for (const item of ALL_ITEMS) {
     const state = getItem(property, item.id);
     if (state.status !== DEFICIT) continue;
     const cost = parseMoney(state.cost);
     claim += cost;
-    photoCount += state.photos.length;
+    const short = shortfall(state);
+    if (short) shortUnits += short;
     lines.push({
       id: item.id,
       label: item.label,
       sector: item.sectorName,
       note: state.note,
-      qty: state.qty,
+      expected: state.expected,
+      counted: state.counted,
+      short,
       condition: state.condition,
       cost,
       costRaw: state.cost,
-      photos: state.photos,
       updatedAt: state.updatedAt,
     });
   }
-  return { lines, claim, photoCount, count: lines.length };
+  return { lines, claim, shortUnits, count: lines.length };
+}
+
+/* --- counts ----------------------------------------------------------------
+ * A rental unit is not a list of yes/no objects: it is supposed to hold twelve
+ * forks and six pans. `expected` is that par level, set per property; `counted`
+ * is what the walkthrough actually found. The gap between them is the finding,
+ * which means the operative never has to write "missing 2 forks" by hand. */
+
+export function parseCount(value) {
+  if (value === '' || value == null) return null;
+  const n = parseInt(String(value).replace(/[^0-9]/g, ''), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+export const hasPar = (state) => parseCount(state.expected) > 0;
+
+/* How many are missing. 0 when complete, null when not yet counted. */
+export function shortfall(state) {
+  const expected = parseCount(state.expected);
+  const counted = parseCount(state.counted);
+  if (!expected || counted === null) return null;
+  return Math.max(0, expected - counted);
+}
+
+/* Counting is itself the verification: the number decides the status, so an
+ * operative who enters a count never has to also remember to tick the box. */
+export function statusFromCount(state) {
+  const short = shortfall(state);
+  if (short === null) return null;
+  return short > 0 ? DEFICIT : VERIFIED;
 }
 
 /* Operatives type "45", "$45", "45.00" and "1,250" — all of them mean money. */
@@ -251,17 +286,6 @@ export function parseMoney(value) {
 
 export const formatMoney = (n) =>
   n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
-
-/* Photos attached anywhere on a property, not just to deficits. */
-export function photoManifest(property) {
-  const out = [];
-  for (const item of ALL_ITEMS) {
-    for (const photoId of getItem(property, item.id).photos) {
-      out.push({ itemId: item.id, label: item.label, sector: item.sectorName, photoId });
-    }
-  }
-  return out;
-}
 
 /* Compact "how stale is this audit" readout for the property list. */
 export function relativeTime(iso) {
@@ -297,13 +321,14 @@ export const CSV_COLUMNS = [
   'Asset',
   'Status',
   'Deficit Notes',
-  'Quantity',
+  'Expected Qty',
+  'Counted Qty',
+  'Short',
   'Brand',
   'Model #',
   'Serial #',
   'Condition',
   'Replacement Cost',
-  'Photos',
   'Last Updated',
   'Audited By',
 ];
@@ -320,13 +345,14 @@ function csvRows(property, stamp) {
         item.label,
         STATUS_LABEL[state.status] || 'Pending',
         state.note,
-        state.qty,
+        state.expected,
+        state.counted,
+        shortfall(state) || '',
         state.brand,
         state.model,
         state.serial,
         state.condition,
         state.cost ? parseMoney(state.cost).toFixed(2) : '',
-        state.photos.length || '',
         state.updatedAt || '',
         property.signedOffBy || '',
       ]
@@ -378,19 +404,17 @@ function triggerDownload(text, filename) {
  * localStorage is one browser profile on one device. Clearing site data, a
  * dead phone, or an OS reinstall takes every audit with it, and an operative
  * has no way to hand a walkthrough to a colleague. A backup file is the escape
- * hatch: the full state plus every photo, in one portable JSON. */
+ * hatch: the full portfolio in one portable JSON. */
 
 export const BACKUP_FORMAT = 'fo.turnover.backup';
 
-export function buildBackup(state, photos) {
+export function buildBackup(state) {
   return JSON.stringify({
     format: BACKUP_FORMAT,
     v: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     propertyCount: state.properties.length,
-    photoCount: Object.keys(photos).length,
     state,
-    photos,
   });
 }
 
@@ -410,11 +434,9 @@ export function parseBackup(text) {
     ? parsed.state.properties.map(sanitizeProperty).filter(Boolean)
     : [];
   if (!properties.length) throw new Error('The backup contains no properties.');
-  const photos = parsed.photos && typeof parsed.photos === 'object' ? parsed.photos : {};
   return {
     exportedAt: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : null,
     properties,
-    photos,
   };
 }
 

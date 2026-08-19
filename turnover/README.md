@@ -22,12 +22,11 @@ with the service worker, the console boots and runs with the network fully down.
 | `icon-*.png` | Icon set (generated from an inline SVG by `npm run icons`) |
 | `src/inventory.js` | The master checklist — 69 assets across 12 spatial sectors |
 | `tools/verify-checklist.mjs` | Asserts the checklist still matches the source document |
-| `src/store.js` | Persistence, derived metrics, CSV, backup format |
-| `src/photos.js` | IndexedDB photo store + capture/downscale pipeline |
-| `src/report.js` | Self-contained printable evidence report |
+| `src/store.js` | Persistence, counts, derived metrics, CSV, backup format |
+| `src/report.js` | Self-contained printable report |
 | `src/app.jsx` | App shell, state, exports |
 | `src/ui.jsx` | Modal / button / field primitives |
-| `src/components/` | AssetRow, Sector, PhotoStrip, and the three sheets |
+| `src/components/` | AssetRow, Sector, and the four sheets |
 | `src/styles.css` | Tailwind entry + base layer |
 | `src/shell.html` | HTML skeleton the build injects CSS/JS into |
 
@@ -46,31 +45,40 @@ The build also computes SHA-256 hashes of the inlined script and style and
 writes them into a strict `Content-Security-Policy` meta tag, so the page
 carries no `unsafe-inline`.
 
-## Evidence, not just ticks
+## Counts, not just ticks
 
-A note reading “stove scratched” is worth very little when a guest disputes a
-deposit; a dated photo of the scratch is worth a great deal. Deficits therefore
-carry **photos** and a **replacement value**.
+A rental unit is not a list of yes/no objects. It is supposed to hold twelve
+forks and six pans, and the job is finding out whether it still does.
 
-Photos are captured straight from the phone camera, rotated per EXIF, and
-downscaled twice on the way in — a long-edge-1400 copy for the report and a
-220px thumbnail for the audit list. A 12 MP capture lands at roughly 100–250 KB.
+Every asset can carry an **expected quantity** — a par level, set per property
+in the row's detail panel. Setting one turns that row into a counter:
 
-**The bytes live in IndexedDB; localStorage only holds a manifest of photo ids.**
-This split is load-bearing: localStorage tops out near 5 MB and is synchronous,
-so a handful of full-size images would evict an entire portfolio's audit data.
-There is a test asserting image bytes never reach localStorage.
+```
+[✓] Forks
+    [ − ]  10  [ + ]     of 12   short 2
+```
 
-**Findings** (header, right) is the deliverable end of the app: every deficit in
-one screen, the summed claim value, a sign-off field, and two exports.
+**Counting is the verification.** Reach par and the asset marks itself
+verified; come up short and it flags itself a deficit and states the shortfall.
+Nobody types "missing 2 forks" — the app already knows, and `Short 2 of 12`
+carries through to the findings screen, the CSV and the report on its own. The
+deficit note is still there for the things a number cannot say ("left burner
+scratched").
 
-- **Report** — a self-contained HTML page with the photos embedded as data URIs.
-  It opens anywhere, prints to PDF, and survives being forwarded, because it
-  references nothing external. This is what you send an owner.
-- **CSV** — the spreadsheet form, now including Replacement Cost, Photos and
-  Audited By.
+Par levels are per property, because Unit A has eight forks and Unit B has
+twelve. Assets with no par set stay simple present/absent ticks, so the
+checklist does not force a count where a count is meaningless — you do not
+count the dishwasher.
 
-Signing puts your name on both in the same gesture.
+**Copy counts** (property roster → `⋯`) pushes one property's par levels onto
+any set of others. Setting pars across 69 assets is the slow part of standing a
+unit up, and a block of identical units shares them: set once, push to the rest.
+Only the expected quantities travel — targets keep their own counts and audit
+state.
+
+**Findings** (bottom bar) is the deliverable end: every deficit in one screen,
+the units short, the summed replacement value, a sign-off field, and two
+exports — a printable HTML report and the CSV. Signing puts your name on both.
 
 ## Working through 69 assets
 
@@ -83,17 +91,15 @@ Signing puts your name on both in the same gesture.
   taps to say so is nine taps an operative will skip. A skipped room is an
   unaudited one.
 - **Collapse** — tap a sector header to fold a room away.
-- **Undo** — bulk verify, checklist reset, property purge and restore all leave
-  a 7-second Undo in the toast. Destructive actions defer their photo deletes
-  until that window shuts, so undoing a reset brings the evidence back too, not
-  a hollow shell.
+- **Undo** — bulk verify, checklist reset, property purge, count-copy and
+  restore all leave a 7-second Undo in the toast.
 
 ## Backup & restore
 
 Everything lives in one browser profile on one device: clearing site data, a
 dead phone, or an OS reinstall takes every audit with it, and there is no server
 to fall back on. The database button in the action bar writes one JSON file
-carrying every property, every audit and every photo.
+carrying every property, its par levels and every audit.
 
 Restoring offers **Add** (append to what's here) or **Replace everything**.
 Take a backup after each turnover, and use it to move work between devices or
@@ -145,17 +151,15 @@ there is no debounce and no unsaved window.
 
 **Storage can fail.** Safari private mode and locked-down WebViews throw on
 `setItem`. The app detects this at boot, keeps working in memory, and shows a
-banner telling the operative to export before closing the tab. IndexedDB is
-probed the same way — if it is unavailable, photo capture simply does not
-appear rather than failing at the moment of use.
+banner telling the operative to export before closing the tab.
 
 **Destructive actions are phrase-gated.** *Nuclear Reset* (wipes the active
 property's checklist) requires typing `RESET`; purging a property profile
 requires typing `DELETE`. Both name what will be destroyed first.
 
 **CSV columns.** `Property Name, Timestamp, Category, Asset, Status,
-Deficit Notes, Quantity, Brand, Model #, Serial #, Condition, Replacement Cost,
-Photos, Last Updated, Audited By`.
+Deficit Notes, Expected Qty, Counted Qty, Short, Brand, Model #, Serial #,
+Condition, Replacement Cost, Last Updated, Audited By`.
 Written RFC 4180-quoted with a UTF-8 BOM for Excel; cells opening with
 `= + - @` are prefixed so a spreadsheet treats a deficit note as text rather
 than a formula.
@@ -166,8 +170,12 @@ Edit `src/inventory.js`, then run `npm run verify && npm run build`.
 
 Give every new item a **stable, unique `id`** — that string is the persistence
 key and the thing that keeps existing audits intact. Per-item options:
-`fields: ['brand','model','serial']`, `qty: true`, `condition: true`, and a
-`hint` string.
+`fields: ['brand','model','serial']`, `condition: true`, and a `hint` string.
+
+`qty: true` marks the assets the source document asks for a count on. Since par
+levels are available on every asset it no longer gates any UI, but
+`npm run verify` asserts the flag still matches the document, so the record of
+what the client asked for stays honest.
 
 `npm run verify` holds the client's source document transcribed section by
 section and fails if an asset goes missing, lands in the wrong room, or loses a

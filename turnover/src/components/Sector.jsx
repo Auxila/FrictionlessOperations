@@ -18,8 +18,7 @@ const SECTOR_ICONS = {
 };
 
 export function Sector({
-  sector, property, items, collapsed, photosEnabled, busyItemId,
-  onPatch, onToggleCollapse, onVerifyAll, onCapture, onRemovePhoto, onOpenPhoto,
+  sector, property, items, collapsed, onPatch, onToggleCollapse, onVerifyAll,
 }) {
   const stats = sectorStats(property, sector);
   const Icon = SECTOR_ICONS[sector.icon];
@@ -96,13 +95,7 @@ export function Sector({
               key={item.id}
               item={item}
               state={getItem(property, item.id)}
-              propertyId={property.id}
-              photosEnabled={photosEnabled}
-              busyPhotos={busyItemId === item.id}
               onPatch={(patch) => onPatch(item.id, patch)}
-              onCapture={onCapture}
-              onRemovePhoto={onRemovePhoto}
-              onOpenPhoto={onOpenPhoto}
             />
           ))}
         </ul>

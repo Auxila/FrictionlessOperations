@@ -2,9 +2,9 @@
  * EVIDENCE REPORT
  *
  * The CSV is for spreadsheets. This is for people: a self-contained HTML
- * document with the photos embedded, laid out to read on a phone, print to
- * PDF, or attach to an email arguing about a security deposit. It carries no
- * external references, so it survives being forwarded anywhere.
+ * document laid out to read on a phone, print to PDF, or attach to an email
+ * arguing about a security deposit. It carries no external references, so it
+ * survives being forwarded anywhere.
  * ========================================================================= */
 
 import { SECTORS } from './inventory.js';
@@ -21,25 +21,19 @@ const fmtDate = (iso) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
 };
 
-/* `photoData` maps photoId -> data URL. Built by the caller, because pulling
- * blobs out of IndexedDB is async and this module stays pure. */
-export function buildReport(property, report, photoData = {}, options = {}) {
+export function buildReport(property, report, options = {}) {
   const stats = computeStats(property);
   const generatedAt = options.generatedAt || new Date();
-  const includePhotos = Object.keys(photoData).length > 0;
 
   const deficitCards = report.lines
     .map((line) => {
-      const shots = line.photos
-        .map((id) => photoData[id])
-        .filter(Boolean)
-        .map((src) => `<img src="${src}" alt="Evidence for ${esc(line.label)}">`)
-        .join('');
-      const meta = [
-        line.qty && `Qty ${esc(line.qty)}`,
-        line.condition && esc(line.condition),
-        line.cost > 0 && formatMoney(line.cost),
-      ]
+      /* A shortfall states itself — "short 2 of 12" is the finding, and the
+       * operative never had to write it. */
+      const headline =
+        line.short > 0
+          ? `Short ${line.short} — counted ${esc(line.counted)} of ${esc(line.expected)}`
+          : null;
+      const meta = [line.condition && esc(line.condition), line.cost > 0 && formatMoney(line.cost)]
         .filter(Boolean)
         .join(' &middot; ');
       return `
@@ -48,9 +42,15 @@ export function buildReport(property, report, photoData = {}, options = {}) {
           <h3>${esc(line.label)}</h3>
           <span class="sector">${esc(line.sector)}</span>
         </header>
-        ${line.note ? `<p class="note">${esc(line.note)}</p>` : '<p class="note muted">No note recorded.</p>'}
+        ${headline ? `<p class="shortfall">${headline}</p>` : ''}
+        ${
+          line.note
+            ? `<p class="note">${esc(line.note)}</p>`
+            : headline
+              ? ''
+              : '<p class="note muted">No note recorded.</p>'
+        }
         ${meta ? `<p class="meta">${meta}</p>` : ''}
-        ${shots ? `<div class="shots">${shots}</div>` : ''}
         <p class="stamp">Logged ${esc(fmtDate(line.updatedAt))}</p>
       </article>`;
     })
@@ -63,7 +63,7 @@ export function buildReport(property, report, photoData = {}, options = {}) {
         const label =
           state.status === VERIFIED ? 'Verified' : state.status === DEFICIT ? 'Deficit' : 'Not audited';
         const detail = [
-          state.qty && `Qty ${esc(state.qty)}`,
+          state.expected && `${esc(state.counted || '—')} of ${esc(state.expected)}`,
           state.brand && esc(state.brand),
           state.model && `Model ${esc(state.model)}`,
           state.serial && `S/N ${esc(state.serial)}`,
@@ -115,8 +115,7 @@ export function buildReport(property, report, photoData = {}, options = {}) {
   .meta, .stamp { margin:8px 0 0; font-size:12px; color:#64748b;
                   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   .stamp { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
-  .shots { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-  .shots img { width:180px; height:135px; object-fit:cover; border-radius:6px; border:1px solid #fca5a5; }
+  .shortfall { margin:8px 0 0; font-weight:700; color:#b91c1c; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   .sector-head th { text-align:left; padding:14px 8px 6px; font-size:10px; text-transform:uppercase;
                     letter-spacing:.12em; color:#0f172a; border-bottom:2px solid #cbd5e1; }
@@ -151,6 +150,7 @@ export function buildReport(property, report, photoData = {}, options = {}) {
     <div class="card"><b>${stats.percent}%</b><span>Complete</span></div>
     <div class="card"><b>${report.count}</b><span>Deficits</span></div>
     <div class="card claim"><b>${esc(formatMoney(report.claim))}</b><span>Replacement value</span></div>
+    ${report.shortUnits ? `<div class="card claim"><b>${report.shortUnits}</b><span>Units short</span></div>` : ''}
   </div>
 
   <h2>Findings${report.count ? ` — ${report.count}` : ''}</h2>
@@ -158,11 +158,6 @@ export function buildReport(property, report, photoData = {}, options = {}) {
     report.count
       ? deficitCards
       : '<p class="note muted">No deficits logged. Every audited asset was present and in acceptable condition.</p>'
-  }
-  ${
-    report.photoCount && !includePhotos
-      ? `<p class="meta">${report.photoCount} photo(s) were attached but excluded from this export.</p>`
-      : ''
   }
 
   <h2>Full inventory</h2>

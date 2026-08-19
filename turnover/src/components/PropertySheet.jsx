@@ -4,7 +4,7 @@
  * ========================================================================= */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Download, Ellipsis, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Check, Copy, Download, Ellipsis, Hash, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 
 import { computeStats, phaseOf, relativeTime } from '../store.js';
 import { Modal, btn, input } from '../ui.jsx';
@@ -15,7 +15,7 @@ import { Modal, btn, input } from '../ui.jsx';
  * overflow strip for rename / duplicate / delete. Replaces the native <select>,
  * which could only ever show a name — useless for deciding which of eleven
  * units still needs a walkthrough. */
-function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename, onDuplicate, onDelete, rowRef }) {
+function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename, onDuplicate, onDelete, onCopyCounts, rowRef }) {
   const stats = computeStats(property);
   const phase = phaseOf(stats);
   const [renaming, setRenaming] = useState(false);
@@ -100,10 +100,11 @@ function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename,
       </div>
 
       {expanded && (
-        <div className="grid grid-cols-3 gap-2 px-3 pb-3">
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3">
           {[
             { label: 'Rename', icon: Pencil, onClick: () => { setDraft(property.name); setRenaming(true); } },
             { label: 'Duplicate', icon: Copy, onClick: onDuplicate },
+            { label: 'Copy counts', icon: Hash, onClick: onCopyCounts },
             { label: 'Delete', icon: Trash2, onClick: onDelete, danger: true },
           ].map(({ label, icon: Icon, onClick, danger }) => (
             <button
@@ -111,7 +112,7 @@ function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename,
               type="button"
               onClick={onClick}
               className={[
-                'flex flex-col items-center gap-1 rounded-lg border py-2.5 font-mono text-[10px] uppercase tracking-wider transition-colors',
+                'flex items-center justify-center gap-1.5 rounded-lg border py-2.5 font-mono text-[10px] uppercase tracking-wider transition-colors',
                 danger
                   ? 'border-red-500/40 text-red-400 hover:bg-red-950/40'
                   : 'border-slate-700 text-slate-300 hover:bg-slate-800',
@@ -127,7 +128,7 @@ function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename,
   );
 }
 
-export function PropertySheet({ properties, activeId, onClose, onSelect, onNew, onRename, onDuplicate, onDelete, onExportAll }) {
+export function PropertySheet({ properties, activeId, onClose, onSelect, onNew, onRename, onDuplicate, onDelete, onCopyCounts, onExportAll }) {
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const activeRef = useRef(null);
@@ -172,6 +173,7 @@ export function PropertySheet({ properties, activeId, onClose, onSelect, onNew, 
             onRename={(name) => onRename(p.id, name)}
             onDuplicate={() => onDuplicate(p.id)}
             onDelete={() => onDelete(p.id)}
+            onCopyCounts={() => onCopyCounts(p.id)}
             rowRef={p.id === activeId ? activeRef : undefined}
           />
         ))}

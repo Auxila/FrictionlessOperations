@@ -10,10 +10,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Database, Download, Upload } from 'lucide-react';
 
-import { formatBytes } from '../photos.js';
 import { Modal, btn } from '../ui.jsx';
 
-export function BackupSheet({ propertyCount, photoCount, storageBytes, onClose, onExport, onImport, busy }) {
+export function BackupSheet({ propertyCount, auditedCount, onClose, onExport, onImport, busy }) {
   const fileRef = useRef(null);
   const [error, setError] = useState(null);
   const [pending, setPending] = useState(null); // parsed backup awaiting a choice
@@ -33,11 +32,10 @@ export function BackupSheet({ propertyCount, photoCount, storageBytes, onClose, 
 
   return (
     <Modal title="Backup & Restore" onClose={onClose} wide>
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid grid-cols-2 gap-2">
         {[
           [propertyCount, 'Properties'],
-          [photoCount, 'Photos'],
-          [formatBytes(storageBytes), 'On device'],
+          [auditedCount, 'Assets audited'],
         ].map(([value, label]) => (
           <div key={label} className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-2.5 text-center">
             <p className="truncate font-mono text-[14px] font-bold text-slate-100">{value}</p>
@@ -50,8 +48,8 @@ export function BackupSheet({ propertyCount, photoCount, storageBytes, onClose, 
         <>
           <p className="mb-4 text-sm leading-relaxed text-slate-400">
             This console stores everything in this browser on this device. A backup file carries
-            every property, every audit and every photo — keep one after each turnover, and use it
-            to move work to another phone or hand it to a colleague.
+            every property, its expected counts and every audit — keep one after each turnover, and use it to move work
+            to another phone or hand it to a colleague.
           </p>
 
           <div className="space-y-2">
@@ -101,8 +99,6 @@ export function BackupSheet({ propertyCount, photoCount, storageBytes, onClose, 
             <div className="min-w-0 text-sm text-slate-300">
               <p className="font-semibold text-slate-100">
                 {pending.properties.length} propert{pending.properties.length === 1 ? 'y' : 'ies'}
-                {Object.keys(pending.photos).length > 0 &&
-                  `, ${Object.keys(pending.photos).length} photos`}
               </p>
               <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-slate-500">
                 {pending.exportedAt

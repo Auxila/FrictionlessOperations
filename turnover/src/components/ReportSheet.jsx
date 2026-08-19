@@ -25,10 +25,13 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
 
   return (
     <Modal title="Findings" subtitle={property.name} onClose={onClose} flush wide>
-      <div className="grid grid-cols-3 gap-px bg-slate-800">
+      <div className={`grid gap-px bg-slate-800 ${report.shortUnits ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {[
           { value: `${stats.percent}%`, label: 'Complete', tone: 'text-slate-100' },
           { value: report.count, label: 'Deficits', tone: report.count ? 'text-red-400' : 'text-slate-100' },
+          ...(report.shortUnits
+            ? [{ value: report.shortUnits, label: 'Units short', tone: 'text-red-400' }]
+            : []),
           { value: formatMoney(report.claim), label: 'Claim value', tone: report.claim ? 'text-amber-400' : 'text-slate-100' },
         ].map(({ value, label, tone }) => (
           <div key={label} className="bg-slate-900 px-2 py-3 text-center">
@@ -68,8 +71,7 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
               </div>
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
                 {line.sector}
-                {line.qty && ` · qty ${line.qty}`}
-                {line.photos.length > 0 && ` · ${line.photos.length} photo${line.photos.length > 1 ? 's' : ''}`}
+                {line.short > 0 && ` · short ${line.short} of ${line.expected}`}
               </p>
               {line.note ? (
                 <p className="mt-1.5 text-[13px] leading-snug text-slate-300">{line.note}</p>
@@ -126,7 +128,7 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           </button>
         </div>
         <p className="text-center font-mono text-[10px] uppercase leading-relaxed tracking-[0.1em] text-slate-600">
-          Report is a printable page with photos embedded
+          Report is a printable page · CSV is the spreadsheet form
         </p>
       </div>
     </Modal>

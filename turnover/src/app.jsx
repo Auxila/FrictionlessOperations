@@ -6,24 +6,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  ChevronDown, ClipboardList, Crosshair, Database, Plus, RotateCcw, Search, Undo2, X,
+  ChevronDown, ClipboardList, Crosshair, Database, Download, Plus, RotateCcw, Search, Undo2, X,
 } from 'lucide-react';
 
-import { SECTORS } from './inventory.js';
+import { ALL_ITEMS, SECTORS } from './inventory.js';
 import {
-  DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, backupFilename, buildBackup, cloneProperty,
-  computeStats, csvFilename, defaultState, deficitReport, downloadCSV, downloadCSVAll,
-  downloadText, getItem, isBlank, loadState, makeProperty, parseBackup, phaseOf,
-  photoManifest, probeStorage, saveState,
+  DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, backupFilename, buildBackup,
+  cloneProperty, computeStats, csvFilename, defaultState, deficitReport, downloadCSV,
+  downloadCSVAll, downloadText, getItem, isBlank, loadState, makeProperty, parseBackup,
+  phaseOf, probeStorage, saveState, statusFromCount,
 } from './store.js';
 import { buildReport, reportFilename } from './report.js';
-import {
-  blobToDataURL, clearPhotos, dataURLToBlob, deletePhoto, deletePhotosByPrefix, allEntries,
-  getPhoto, newPhotoId, photoBytes, photoKey, photosAvailable, processCapture, putPhoto,
-} from './photos.js';
 import { ConfirmPhrase, Modal, btn, input } from './ui.jsx';
 import { Sector } from './components/Sector.jsx';
-import { Lightbox } from './components/PhotoStrip.jsx';
+import { CopyCountsSheet } from './components/CopyCountsSheet.jsx';
 import { PropertySheet } from './components/PropertySheet.jsx';
 import { ReportSheet } from './components/ReportSheet.jsx';
 import { BackupSheet } from './components/BackupSheet.jsx';
@@ -42,23 +38,25 @@ function App() {
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState(null); // { message, undo? }
   const [storageOK] = useState(probeStorage);
-  const [photosOK, setPhotosOK] = useState(false);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState({});
-  const [lightbox, setLightbox] = useState(null);
-  const [busyItemId, setBusyItemId] = useState(null);
   const [exporting, setExporting] = useState(false);
-  const [storageBytes, setStorageBytes] = useState(0);
   const scrollRef = useRef(null);
   const toastTimer = useRef(0);
   /* Holds the previous state plus any blob cleanup a destructive action
    * deferred, so Undo can put everything back. See runPendingCleanup(). */
   const undoRef = useRef(null);
 
+  /* An earlier build kept photo evidence in IndexedDB. That feature is gone;
+   * drop the database so removed users are not left carrying its bytes. */
   useEffect(() => {
-    photosAvailable().then(setPhotosOK);
+    try {
+      indexedDB?.deleteDatabase('fo.turnover.photos');
+    } catch {
+      /* nothing to clean up */
+    }
   }, []);
 
   /* Absolute persistence: every state transition is written through
@@ -73,9 +71,7 @@ function App() {
   const phase = phaseOf(stats);
   const report = useMemo(() => deficitReport(property), [property]);
 
-  /* --- toast + undo ------------------------------------------------------
-   * Destructive actions defer their blob deletes until the undo window shuts,
-   * so undoing a reset restores the photos too rather than a hollow shell. */
+  /* --- toast + undo --------------------------------------------------- */
   const runPendingCleanup = useCallback(() => {
     const cleanup = undoRef.current?.cleanup;
     undoRef.current = null;
@@ -114,7 +110,14 @@ function App() {
           if (p.id !== prev.activeId) return p;
           const current = { ...EMPTY_ITEM, ...(p.items[itemId] || {}) };
           const next = { ...current, ...patch };
-          if ('status' in patch && patch.status !== current.status) next.updatedAt = now;
+          /* Counting IS the verification. Once a par level exists, the number
+           * decides the status, so nobody has to also remember to tick a box
+           * — or to type "missing 2 forks" that the app can already see. */
+          if (('counted' in patch || 'expected' in patch) && !('status' in patch)) {
+            const derived = statusFromCount(next);
+            if (derived) next.status = derived;
+          }
+          if (next.status !== current.status) next.updatedAt = now;
           const items = { ...p.items };
           /* Prune records that carry nothing so saves stay lean. */
           if (isBlank(next)) delete items[itemId];
@@ -142,35 +145,6 @@ function App() {
       }),
     }));
     flash(`${pending.length} verified in ${sector.name}`, { state: snapshot });
-  };
-
-  /* --- photo evidence ---------------------------------------------------- */
-  const capturePhotos = async (itemId, files) => {
-    setBusyItemId(itemId);
-    const added = [];
-    try {
-      for (const file of files.slice(0, 6)) {
-        const record = await processCapture(file);
-        const id = newPhotoId();
-        await putPhoto(photoKey(property.id, itemId, id), record);
-        added.push(id);
-      }
-    } catch {
-      flash('Could not save that photo');
-    } finally {
-      setBusyItemId(null);
-    }
-    if (!added.length) return;
-    const existing = getItem(property, itemId).photos;
-    patchItem(itemId, { photos: [...existing, ...added].slice(0, 6) });
-    photoBytes().then(setStorageBytes).catch(() => {});
-  };
-
-  const removePhoto = async (itemId, photoId) => {
-    const existing = getItem(property, itemId).photos;
-    patchItem(itemId, { photos: existing.filter((id) => id !== photoId) });
-    await deletePhoto(photoKey(property.id, itemId, photoId)).catch(() => {});
-    setLightbox(null);
   };
 
   /* --- property lifecycle ------------------------------------------------ */
@@ -201,20 +175,10 @@ function App() {
     flash(`Renamed to ${name}`);
   };
 
-  const duplicateProperty = async (id) => {
+  const duplicateProperty = (id) => {
     const source = state.properties.find((p) => p.id === id);
     if (!source) return;
     const copy = cloneProperty(source, `${source.name} (copy)`);
-    /* Photos are keyed by property, so a duplicate needs its own copies —
-     * otherwise deleting the original would blank the copy's evidence. */
-    try {
-      for (const { itemId, photoId } of photoManifest(source)) {
-        const record = await getPhoto(photoKey(source.id, itemId, photoId));
-        if (record) await putPhoto(photoKey(copy.id, itemId, photoId), record);
-      }
-    } catch {
-      /* An evidence copy that fails still leaves a usable checklist copy. */
-    }
     setState((prev) => {
       const at = prev.properties.findIndex((p) => p.id === id) + 1;
       const properties = [...prev.properties];
@@ -224,6 +188,37 @@ function App() {
     toTop();
     setModal(null);
     flash('Property duplicated with its audit data');
+  };
+
+  /* Par levels are the slow part of setting a property up, and a block of
+   * identical units shares them. Copy once, apply to many — counts and audit
+   * state on the targets are left alone. */
+  const copyExpected = (sourceId, targetIds) => {
+    const source = state.properties.find((p) => p.id === sourceId);
+    if (!source || !targetIds.length) return;
+    const snapshot = state;
+    const pars = new Map();
+    for (const item of ALL_ITEMS) {
+      const expected = getItem(source, item.id).expected;
+      if (expected) pars.set(item.id, expected);
+    }
+    const now = new Date().toISOString();
+    setState((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) => {
+        if (!targetIds.includes(p.id)) return p;
+        const items = { ...p.items };
+        for (const [itemId, expected] of pars) {
+          items[itemId] = { ...EMPTY_ITEM, ...(items[itemId] || {}), expected };
+        }
+        return { ...p, items, updatedAt: now };
+      }),
+    }));
+    setModal(null);
+    flash(
+      `${pars.size} counts copied to ${targetIds.length} propert${targetIds.length === 1 ? 'y' : 'ies'}`,
+      { state: snapshot }
+    );
   };
 
   const deleteProperty = (id) => {
@@ -236,15 +231,11 @@ function App() {
       return { ...prev, activeId, properties: remaining };
     });
     setModal(null);
-    flash('Property profile purged', {
-      state: snapshot,
-      cleanup: () => deletePhotosByPrefix(`${id}|`),
-    });
+    flash('Property profile purged', { state: snapshot });
   };
 
   const resetProperty = () => {
     const snapshot = state;
-    const id = property.id;
     setState((prev) => ({
       ...prev,
       properties: prev.properties.map((p) =>
@@ -254,10 +245,7 @@ function App() {
       ),
     }));
     setModal(null);
-    flash('Checklist wiped to zero', {
-      state: snapshot,
-      cleanup: () => deletePhotosByPrefix(`${id}|`),
-    });
+    flash('Checklist wiped to zero', { state: snapshot });
   };
 
   const signOff = (name) => {
@@ -292,62 +280,20 @@ function App() {
     flash(`Extracted ${state.properties.length} properties → CSV`);
   };
 
-  const exportReport = async (signedBy) => {
-    setExporting(true);
-    const photoData = {};
-    try {
-      for (const line of report.lines) {
-        for (const photoId of line.photos) {
-          const rec = await getPhoto(photoKey(property.id, line.id, photoId));
-          if (rec?.full) photoData[photoId] = await blobToDataURL(rec.full);
-        }
-      }
-    } catch {
-      /* Ship the report without the images rather than not at all. */
-    }
+  const exportReport = (signedBy) => {
     const target = signedProperty(signedBy);
-    const html = buildReport(target, report, photoData);
-    downloadText(html, reportFilename(target), 'text/html');
-    setExporting(false);
+    downloadText(buildReport(target, report), reportFilename(target), 'text/html');
     setModal(null);
     flash(`Report built — ${report.count} finding${report.count === 1 ? '' : 's'}`);
   };
 
-  const exportBackup = async () => {
-    setExporting(true);
-    const photos = {};
-    try {
-      for (const [key, rec] of await allEntries()) {
-        if (!rec?.full) continue;
-        photos[key] = {
-          full: await blobToDataURL(rec.full),
-          thumb: rec.thumb ? await blobToDataURL(rec.thumb) : null,
-          createdAt: rec.createdAt,
-        };
-      }
-    } catch {
-      /* A checklist-only backup still beats no backup. */
-    }
-    downloadText(buildBackup(state, photos), backupFilename());
-    setExporting(false);
+  const exportBackup = () => {
+    downloadText(buildBackup(state), backupFilename());
     flash('Backup downloaded — store it somewhere off this device');
   };
 
-  const applyBackup = async (parsed, mode) => {
+  const applyBackup = (parsed, mode) => {
     const snapshot = state;
-    try {
-      if (mode === 'replace') await clearPhotos();
-      for (const [key, rec] of Object.entries(parsed.photos)) {
-        if (!rec?.full) continue;
-        await putPhoto(key, {
-          full: await dataURLToBlob(rec.full),
-          thumb: rec.thumb ? await dataURLToBlob(rec.thumb) : null,
-          createdAt: rec.createdAt,
-        });
-      }
-    } catch {
-      /* Restore the checklists even if the images could not be written. */
-    }
     setState((prev) => {
       const properties =
         mode === 'replace' ? parsed.properties : [...prev.properties, ...parsed.properties];
@@ -391,13 +337,8 @@ function App() {
     });
   };
 
-  const openBackup = () => {
-    photoBytes().then(setStorageBytes).catch(() => {});
-    setModal({ type: 'backup' });
-  };
-
-  const photoCount = useMemo(
-    () => state.properties.reduce((n, p) => n + photoManifest(p).length, 0),
+  const auditedCount = useMemo(
+    () => state.properties.reduce((n, p) => n + Object.keys(p.items).length, 0),
     [state.properties]
   );
 
@@ -487,7 +428,7 @@ function App() {
         </div>
 
         {/* Second-pass controls */}
-        <div className="flex items-center gap-1.5 px-3 pb-2.5">
+        <div className="flex items-center gap-2 px-3 pb-2.5">
           <div className="flex rounded-lg border border-slate-800 bg-slate-950 p-0.5" role="tablist" aria-label="Filter assets">
             {FILTERS.map(({ key, label }) => (
               <button
@@ -497,7 +438,7 @@ function App() {
                 aria-selected={filter === key}
                 onClick={() => setFilter(key)}
                 className={[
-                  'grid min-h-[38px] place-items-center whitespace-nowrap rounded-md px-3 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors',
+                  'inline-flex min-h-[38px] items-center justify-center gap-1 whitespace-nowrap rounded-md px-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em] transition-colors',
                   filter === key ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300',
                 ].join(' ')}
               >
@@ -529,19 +470,9 @@ function App() {
             type="button"
             onClick={jumpToNext}
             aria-label="Jump to the next unaudited asset"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 transition-colors hover:border-slate-600 hover:text-slate-300"
+            className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 transition-colors hover:border-slate-600 hover:text-slate-300"
           >
             <Crosshair size={15} aria-hidden="true" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setModal({ type: 'report' })}
-            aria-label="Open findings and export"
-            className="ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-800 px-2.5 text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
-          >
-            <ClipboardList size={15} aria-hidden="true" />
-            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.1em]">Findings</span>
           </button>
         </div>
 
@@ -586,18 +517,11 @@ function App() {
             property={property}
             items={items}
             collapsed={Boolean(collapsed[sector.id])}
-            photosEnabled={photosOK}
-            busyItemId={busyItemId}
             onPatch={patchItem}
             onToggleCollapse={() =>
               setCollapsed((prev) => ({ ...prev, [sector.id]: !prev[sector.id] }))
             }
             onVerifyAll={() => verifySector(sector)}
-            onCapture={capturePhotos}
-            onRemovePhoto={removePhoto}
-            onOpenPhoto={(itemId, label, photoIds, index) =>
-              setLightbox({ itemId, label, photoIds, index })
-            }
           />
         ))}
 
@@ -622,17 +546,30 @@ function App() {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={exportCSV}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-100 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-slate-950 transition-colors hover:bg-white active:scale-[0.98]"
+            onClick={() => setModal({ type: 'report' })}
+            className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg bg-slate-100 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-slate-950 transition-colors hover:bg-white active:scale-[0.98]"
           >
             <ClipboardList size={17} strokeWidth={2.5} aria-hidden="true" />
-            Export CSV
+            <span className="truncate">Findings</span>
+            {report.count > 0 && (
+              <span className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 font-mono text-[11px] text-white">
+                {report.count}
+              </span>
+            )}
           </button>
           <button
             type="button"
-            onClick={openBackup}
+            onClick={exportCSV}
+            aria-label="Export this property to CSV"
+            className="grid w-[48px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+          >
+            <Download size={18} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal({ type: 'backup' })}
             aria-label="Backup and restore"
-            className="grid w-[52px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+            className="grid w-[48px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
           >
             <Database size={18} aria-hidden="true" />
           </button>
@@ -640,7 +577,7 @@ function App() {
             type="button"
             onClick={() => setModal({ type: 'reset' })}
             aria-label="Reset this checklist"
-            className="grid w-[52px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-400"
+            className="grid w-[48px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-400"
           >
             <RotateCcw size={18} aria-hidden="true" />
           </button>
@@ -666,18 +603,6 @@ function App() {
         </div>
       )}
 
-      {lightbox && (
-        <Lightbox
-          propertyId={property.id}
-          itemId={lightbox.itemId}
-          label={lightbox.label}
-          photoIds={lightbox.photoIds}
-          index={lightbox.index}
-          onIndex={(index) => setLightbox((prev) => ({ ...prev, index }))}
-          onClose={() => setLightbox(null)}
-        />
-      )}
-
       {modal?.type === 'properties' && (
         <PropertySheet
           properties={state.properties}
@@ -688,9 +613,22 @@ function App() {
           onRename={renameProperty}
           onDuplicate={duplicateProperty}
           onDelete={(id) => setModal({ type: 'delete', id })}
+          onCopyCounts={(id) => setModal({ type: 'copy-counts', id })}
           onExportAll={exportAll}
         />
       )}
+
+      {modal?.type === 'copy-counts' && (() => {
+        const source = state.properties.find((p) => p.id === modal.id);
+        return source ? (
+          <CopyCountsSheet
+            source={source}
+            properties={state.properties}
+            onClose={() => setModal(null)}
+            onApply={copyExpected}
+          />
+        ) : null;
+      })()}
 
       {modal?.type === 'report' && (
         <ReportSheet
@@ -707,8 +645,7 @@ function App() {
       {modal?.type === 'backup' && (
         <BackupSheet
           propertyCount={state.properties.length}
-          photoCount={photoCount}
-          storageBytes={storageBytes}
+          auditedCount={auditedCount}
           busy={exporting}
           onClose={() => setModal(null)}
           onExport={exportBackup}
@@ -761,8 +698,9 @@ function App() {
             prompt={
               <>
                 <p>
-                  This clears every verification, quantity, serial number, photo and deficit note
-                  on <span className="font-mono font-bold text-slate-100">{property.name}</span>.
+                  This clears every verification, count, serial number and deficit note on{' '}
+                  <span className="font-mono font-bold text-slate-100">{property.name}</span>,
+                  including its expected quantities.
                 </p>
                 <p className="text-slate-400">
                   {stats.verified} verified and {stats.deficit} deficit records will be destroyed.
