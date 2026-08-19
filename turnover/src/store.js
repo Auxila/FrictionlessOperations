@@ -33,6 +33,21 @@ export const EMPTY_ITEM = {
 const uid = () =>
   'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 
+/* A duplicate carries its audit data across — the common case is a block of
+ * identical units where the second walkthrough starts from the first. */
+export function cloneProperty(source, name) {
+  const now = new Date().toISOString();
+  const items = {};
+  for (const [id, item] of Object.entries(source.items)) items[id] = { ...item };
+  return {
+    id: uid(),
+    name: String(name).trim() || `${source.name} (copy)`,
+    createdAt: now,
+    updatedAt: now,
+    items,
+  };
+}
+
 export function makeProperty(name) {
   const now = new Date().toISOString();
   return { id: uid(), name: String(name).trim() || 'Untitled Unit', createdAt: now, updatedAt: now, items: {} };
@@ -179,6 +194,21 @@ export function sectorStats(property, sector) {
   return { verified, deficit, total: sector.items.length };
 }
 
+/* Compact "how stale is this audit" readout for the property list. */
+export function relativeTime(iso) {
+  if (!iso) return 'never';
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return 'never';
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(then).toLocaleDateString();
+}
+
 /* --- CSV extraction engine ------------------------------------------------- */
 
 const STATUS_LABEL = { [VERIFIED]: 'Verified', [DEFICIT]: 'Deficit', [PENDING]: 'Pending' };
@@ -206,9 +236,8 @@ export const CSV_COLUMNS = [
   'Last Updated',
 ];
 
-export function buildCSV(property, exportedAt = new Date()) {
-  const stamp = exportedAt.toISOString();
-  const rows = [CSV_COLUMNS.map(csvCell).join(',')];
+function csvRows(property, stamp) {
+  const rows = [];
   for (const item of ALL_ITEMS) {
     const state = getItem(property, item.id);
     rows.push(
@@ -230,7 +259,22 @@ export function buildCSV(property, exportedAt = new Date()) {
         .join(',')
     );
   }
-  return rows.join('\r\n');
+  return rows;
+}
+
+export function buildCSV(property, exportedAt = new Date()) {
+  return [CSV_COLUMNS.map(csvCell).join(','), ...csvRows(property, exportedAt.toISOString())]
+    .join('\r\n');
+}
+
+/* Every property in one sheet — the Property Name column is what separates
+ * them, so a manager can pivot the whole portfolio in one pass. */
+export function buildCSVAll(properties, exportedAt = new Date()) {
+  const stamp = exportedAt.toISOString();
+  return [
+    CSV_COLUMNS.map(csvCell).join(','),
+    ...properties.flatMap((property) => csvRows(property, stamp)),
+  ].join('\r\n');
 }
 
 export function csvFilename(property, exportedAt = new Date()) {
@@ -242,18 +286,28 @@ export function csvFilename(property, exportedAt = new Date()) {
   return `turnover_${slug}_${ts}.csv`;
 }
 
-export function downloadCSV(property) {
-  const now = new Date();
+function triggerDownload(text, filename) {
   /* BOM keeps Excel from mangling UTF-8 in operative-typed deficit notes. */
-  const blob = new Blob(['﻿' + buildCSV(property, now)], {
-    type: 'text/csv;charset=utf-8;',
-  });
+  const blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = csvFilename(property, now);
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function downloadCSV(property) {
+  const now = new Date();
+  triggerDownload(buildCSV(property, now), csvFilename(property, now));
+}
+
+export function downloadCSVAll(properties) {
+  const now = new Date();
+  triggerDownload(
+    buildCSVAll(properties, now),
+    csvFilename({ name: `all-${properties.length}-properties` }, now)
+  );
 }

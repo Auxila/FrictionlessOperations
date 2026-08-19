@@ -134,24 +134,93 @@ check('a sector header is locked to the top', stuck >= 1, `${stuck} stuck`);
 await page.screenshot({ path: SHOTS + '/02-scrolled.png' });
 
 /* ── multi-node: add a property ───────────────────────────────────────── */
+const openRoster = () => page.getByLabel(/^Active property:/).click();
+const rosterRows = () => page.locator('[role=dialog] li');
+
 await page.getByLabel('Add property profile').click();
 await page.fill('input[placeholder="Unit 02"]', 'Seaside Villa 4B');
 await page.getByRole('button', { name: 'Provision' }).click();
 await page.waitForTimeout(150);
-check('property count = 2', (await page.locator('select option').count()) === 2);
-check('new property is active', (await page.locator('select').inputValue()) ===
-      (await page.locator('select option').nth(1).getAttribute('value')));
+await openRoster();
+check('property count = 2', (await rosterRows().count()) === 2);
+await page.getByLabel('Close').click();
+check('new property is active', (await page.getByLabel(/^Active property: Seaside Villa 4B/).count()) === 1);
 check('new property is unverified', (await page.getByText('Offline', { exact: true }).count()) === 1);
 check('new property has no carried-over notes',
       (await page.locator('#k-refrigerator-note').count()) === 0);
-await page.screenshot({ path: SHOTS + '/03-fresh-property.png' });
+await openRoster();
+await page.screenshot({ path: SHOTS + '/03-property-roster.png' });
+check('roster shows per-property progress',
+      (await page.getByLabel(/^Switch to Unit 01 — \d+% verified/).count()) === 1);
+await page.getByLabel('Close').click();
 
 /* ── switching back restores the first audit ──────────────────────────── */
-const firstId = await page.locator('select option').first().getAttribute('value');
-await page.selectOption('select', firstId);
+await openRoster();
+await page.getByLabel(/^Switch to Unit 01/).click();
 await page.waitForTimeout(150);
 check('switching back restores data',
       (await page.inputValue('#k-refrigerator-note')) === 'Door seal torn; ice maker dead');
+
+/* ── rename ──────────────────────────────────────────────────────────── */
+await openRoster();
+await page.getByLabel('Actions for Unit 01').click();
+await page.getByRole('button', { name: 'Rename' }).click();
+await page.locator('[role=dialog] input').first().fill('Harbor Loft 12');
+await page.getByLabel('Save name').click();
+await page.waitForTimeout(150);
+check('rename updates the roster', (await page.getByLabel(/^Switch to Harbor Loft 12/).count()) === 1);
+await page.getByLabel('Close').click();
+check('rename updates the header', (await page.getByLabel(/^Active property: Harbor Loft 12/).count()) === 1);
+await page.reload({ waitUntil: 'networkidle' });
+check('rename persists', (await page.getByLabel(/^Active property: Harbor Loft 12/).count()) === 1);
+
+/* ── duplicate carries the audit data across ─────────────────────────── */
+await openRoster();
+await page.getByLabel('Actions for Harbor Loft 12').click();
+await page.getByRole('button', { name: 'Duplicate' }).click();
+await page.waitForTimeout(200);
+check('duplicate becomes active',
+      (await page.getByLabel(/^Active property: Harbor Loft 12 \(copy\)/).count()) === 1);
+check('duplicate carries the deficit note',
+      (await page.inputValue('#k-refrigerator-note')) === 'Door seal torn; ice maker dead');
+await page.fill('#k-refrigerator-note', 'copy diverged');
+await openRoster();
+await page.getByLabel(/^Switch to Harbor Loft 12 —/).click();
+await page.waitForTimeout(150);
+check('original is untouched by edits to the copy',
+      (await page.inputValue('#k-refrigerator-note')) === 'Door seal torn; ice maker dead');
+
+/* ── export every property in one sheet ──────────────────────────────── */
+await openRoster();
+const allDl = await Promise.all([
+  page.waitForEvent('download', { timeout: 8000 }),
+  page.getByLabel(/^Export all 3 properties/).click(),
+]).then((r) => r[0]).catch(() => null);
+check('export-all downloads', !!allDl, allDl ? await allDl.suggestedFilename() : 'no download');
+if (allDl) {
+  const rows = readFileSync(await allDl.path(), 'utf8').replace(/^\ufeff/, '').trim().split('\r\n');
+  check('export-all has 3 × 69 rows', rows.length === 3 * 69 + 1, String(rows.length - 1));
+  check('export-all names every property',
+        ['Harbor Loft 12', 'Harbor Loft 12 (copy)', 'Seaside Villa 4B']
+          .every((n) => rows.some((r) => r.startsWith(`"${n}"`))));
+}
+
+/* ── purge the copy: an audited profile needs the typed phrase ────────── */
+await openRoster();
+await page.getByLabel('Actions for Harbor Loft 12 (copy)').click();
+await page.getByRole('button', { name: 'Delete' }).click();
+const purge = page.getByRole('button', { name: 'Purge profile' });
+check('purge locked before phrase', await purge.isDisabled());
+await page.fill('input[placeholder="DELETE"]', 'DELETE');
+await purge.click();
+await page.waitForTimeout(200);
+await openRoster();
+check('copy purged', (await rosterRows().count()) === 2);
+await page.getByLabel('Close').click();
+/* The purged copy was the active profile, so the app must land somewhere
+   sensible rather than on a dangling id. */
+check('purging the active profile lands on a real one',
+      (await page.getByLabel(/^Active property: Harbor Loft 12$|^Active property: Harbor Loft 12\./).count()) === 1);
 
 /* ── verified phase: check everything ─────────────────────────────────── */
 await page.evaluate(() => {
@@ -208,7 +277,9 @@ check('reset returns to Offline', (await page.getByText('Offline', { exact: true
 check('reset cleared notes', (await page.locator('#k-refrigerator-note').count()) === 0);
 await page.reload({ waitUntil: 'networkidle' });
 check('reset persisted', (await page.getByText('Offline', { exact: true }).count()) === 1);
-check('other property survived reset', (await page.locator('select option').count()) === 2);
+await openRoster();
+check('other property survived reset', (await rosterRows().count()) === 2);
+await page.getByLabel('Close').click();
 
 /* ── offline boot via service worker ──────────────────────────────────── */
 await page.evaluate(() => navigator.serviceWorker.ready);

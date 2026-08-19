@@ -6,16 +6,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  AlertTriangle, BedDouble, Check, ChevronDown, ChevronRight, CookingPot, Download, Layers,
-  Plus, Refrigerator, RotateCcw, ShowerHead, Sofa, Soup, Sun, Trash2, Utensils,
-  UtensilsCrossed, WashingMachine, Waves, X,
+  AlertTriangle, BedDouble, Check, ChevronDown, ChevronRight, CookingPot, Copy, Download,
+  Ellipsis, Layers, Pencil, Plus, Refrigerator, RotateCcw, Search, ShowerHead, Sofa, Soup,
+  Sun, Trash2, Utensils, UtensilsCrossed, WashingMachine, Waves, X,
 } from 'lucide-react';
 
 import { SECTORS, FIELD_LABELS } from './inventory.js';
 import {
-  DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, computeStats, defaultState,
-  downloadCSV, getItem, isBlank, loadState, makeProperty, phaseOf, probeStorage,
-  saveState, sectorStats,
+  DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, cloneProperty, computeStats, defaultState,
+  downloadCSV, downloadCSVAll, getItem, isBlank, loadState, makeProperty, phaseOf,
+  probeStorage, relativeTime, saveState, sectorStats,
 } from './store.js';
 
 const SECTOR_ICONS = {
@@ -287,7 +287,7 @@ function Sector({ sector, property, onPatch }) {
 
 /* ── Modal ──────────────────────────────────────────────────────────────── */
 
-function Modal({ title, tone = 'slate', onClose, children }) {
+function Modal({ title, tone = 'slate', onClose, children, bodyClass = 'p-5', wide = false }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -304,12 +304,13 @@ function Modal({ title, tone = 'slate', onClose, children }) {
     >
       <div
         className={[
-          'w-full max-w-md rounded-t-2xl border bg-slate-900 p-5 shadow-2xl sm:rounded-2xl',
+          'w-full overflow-hidden rounded-t-2xl border bg-slate-900 shadow-2xl sm:rounded-2xl',
+          wide ? 'max-w-lg' : 'max-w-md',
           tone === 'danger' ? 'border-red-500/40' : 'border-slate-700',
         ].join(' ')}
-        style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className={`flex items-start justify-between gap-3 ${bodyClass === 'p-5' ? 'px-5 pb-4 pt-5' : 'border-b border-slate-800 px-4 py-3.5'}`}>
           <h2
             className={[
               'text-base font-bold uppercase tracking-[0.1em]',
@@ -327,7 +328,7 @@ function Modal({ title, tone = 'slate', onClose, children }) {
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        {children}
+        <div className={bodyClass === 'p-5' ? 'px-5 pb-5' : ''}>{children}</div>
       </div>
     </div>
   );
@@ -380,11 +381,204 @@ function ConfirmPhrase({ phrase, prompt, action, onConfirm, onClose }) {
   );
 }
 
+/* ── Property roster ────────────────────────────────────────────────────── */
+
+/* One row per property: name, live progress, deficit count, staleness, and an
+ * overflow strip for rename / duplicate / delete. Replaces the native <select>,
+ * which could only ever show a name — useless for deciding which of eleven
+ * units still needs a walkthrough. */
+function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename, onDuplicate, onDelete, rowRef }) {
+  const stats = computeStats(property);
+  const phase = phaseOf(stats);
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(property.name);
+
+  const commitRename = () => {
+    const next = draft.trim();
+    if (next && next !== property.name) onRename(next);
+    setRenaming(false);
+  };
+
+  if (renaming) {
+    return (
+      <li className="border-b border-slate-800 bg-slate-950/60 p-3">
+        <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+          Rename property
+        </label>
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            type="text"
+            value={draft}
+            maxLength={60}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename();
+              if (e.key === 'Escape') { setDraft(property.name); setRenaming(false); }
+            }}
+            className={input}
+          />
+          <button
+            type="button"
+            onClick={commitRename}
+            aria-label="Save name"
+            className="grid w-12 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-950 hover:bg-white"
+          >
+            <Check size={18} strokeWidth={3} aria-hidden="true" />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li ref={rowRef} className={`border-b border-slate-800 ${active ? 'bg-slate-800/40' : ''}`}>
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={onSelect}
+          style={{ '--phase': phase.rgb }}
+          aria-label={`Switch to ${property.name} — ${stats.percent}% verified, ${stats.deficit} deficit`}
+          aria-current={active ? 'true' : undefined}
+          className="min-w-0 flex-1 px-3 py-3 text-left"
+        >
+          <div className="flex items-center gap-2">
+            {active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" aria-hidden="true" />}
+            <span className={`truncate text-[15px] font-semibold ${active ? 'text-white' : 'text-slate-200'}`}>
+              {property.name}
+            </span>
+            <span className="ml-auto shrink-0 font-mono text-[11px] font-bold tabular-nums text-[rgb(var(--phase))]">
+              {stats.percent}%
+            </span>
+          </div>
+          <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-800">
+            <div className="h-full rounded-full bg-[rgb(var(--phase))]" style={{ width: `${stats.percent}%` }} />
+          </div>
+          <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-slate-500">
+            {stats.verified}/{stats.total} verified
+            {stats.deficit > 0 && <span className="text-red-400"> · {stats.deficit} deficit</span>}
+            <span className="text-slate-600"> · {relativeTime(property.updatedAt)}</span>
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={onExpand}
+          aria-expanded={expanded}
+          aria-label={`Actions for ${property.name}`}
+          className="grid w-11 shrink-0 place-items-center border-l border-slate-800/70 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+        >
+          <Ellipsis size={18} aria-hidden="true" />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="grid grid-cols-3 gap-2 px-3 pb-3">
+          {[
+            { label: 'Rename', icon: Pencil, onClick: () => { setDraft(property.name); setRenaming(true); } },
+            { label: 'Duplicate', icon: Copy, onClick: onDuplicate },
+            { label: 'Delete', icon: Trash2, onClick: onDelete, danger: true },
+          ].map(({ label, icon: Icon, onClick, danger }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={onClick}
+              className={[
+                'flex flex-col items-center gap-1 rounded-lg border py-2.5 font-mono text-[10px] uppercase tracking-wider transition-colors',
+                danger
+                  ? 'border-red-500/40 text-red-400 hover:bg-red-950/40'
+                  : 'border-slate-700 text-slate-300 hover:bg-slate-800',
+              ].join(' ')}
+            >
+              <Icon size={15} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function PropertySheet({ properties, activeId, onClose, onSelect, onNew, onRename, onDuplicate, onDelete, onExportAll }) {
+  const [query, setQuery] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+  const activeRef = useRef(null);
+
+  /* With a portfolio of a dozen units the active one can open below the fold,
+   * which reads as "my property is gone". Put it on screen immediately. */
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
+
+  /* Search only earns its space once the roster outgrows a glance. */
+  const searchable = properties.length > 5;
+  const visible = query.trim()
+    ? properties.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : properties;
+
+  return (
+    <Modal title={`Properties · ${properties.length}`} onClose={onClose} bodyClass="p-0" wide>
+      {searchable && (
+        <div className="relative border-b border-slate-800 p-3">
+          <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter properties…"
+            aria-label="Filter properties"
+            className={`${input} pl-9`}
+          />
+        </div>
+      )}
+
+      <ul className="max-h-[45dvh] overflow-y-auto">
+        {visible.map((p) => (
+          <PropertyRow
+            key={p.id}
+            property={p}
+            active={p.id === activeId}
+            expanded={expandedId === p.id}
+            onSelect={() => onSelect(p.id)}
+            onExpand={() => setExpandedId(expandedId === p.id ? null : p.id)}
+            onRename={(name) => onRename(p.id, name)}
+            onDuplicate={() => onDuplicate(p.id)}
+            onDelete={() => onDelete(p.id)}
+            rowRef={p.id === activeId ? activeRef : undefined}
+          />
+        ))}
+        {!visible.length && (
+          <li className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-wider text-slate-500">
+            No property matches “{query}”
+          </li>
+        )}
+      </ul>
+
+      <div className="flex gap-2 border-t border-slate-800 p-3">
+        <button type="button" onClick={onNew} className={`${btn.primary} flex items-center justify-center gap-2`}>
+          <Plus size={17} strokeWidth={3} aria-hidden="true" />
+          New
+        </button>
+        <button
+          type="button"
+          onClick={onExportAll}
+          disabled={properties.length < 2}
+          aria-label={`Export all ${properties.length} properties to one CSV`}
+          className={`${btn.ghost} flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40`}
+        >
+          <Download size={16} aria-hidden="true" />
+          Export all
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ── App ────────────────────────────────────────────────────────────────── */
 
 function App() {
   const [state, setState] = useState(loadState);
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(null); // { type, id? }
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState(null);
   const [storageOK] = useState(probeStorage);
@@ -428,18 +622,54 @@ function App() {
     });
   }, []);
 
+  const toTop = () => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  };
+
   const selectProperty = (id) => {
     setState((prev) => ({ ...prev, activeId: id }));
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    toTop();
+    setModal(null);
   };
 
   const createProperty = () => {
     const created = makeProperty(newName || `Unit ${String(state.properties.length + 1).padStart(2, '0')}`);
     setState((prev) => ({ ...prev, activeId: created.id, properties: [...prev.properties, created] }));
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    toTop();
     setNewName('');
     setModal(null);
     flash(`${created.name} provisioned — ${stats.total} assets unverified`);
+  };
+
+  const renameProperty = (id, name) => {
+    setState((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) => (p.id === id ? { ...p, name } : p)),
+    }));
+    flash(`Renamed to ${name}`);
+  };
+
+  const duplicateProperty = (id) => {
+    setState((prev) => {
+      const source = prev.properties.find((p) => p.id === id);
+      if (!source) return prev;
+      const copy = cloneProperty(source, `${source.name} (copy)`);
+      /* Slot the copy next to its original rather than at the end — a block of
+       * identical units should read as a block. */
+      const at = prev.properties.findIndex((p) => p.id === id) + 1;
+      const properties = [...prev.properties];
+      properties.splice(at, 0, copy);
+      return { ...prev, activeId: copy.id, properties };
+    });
+    toTop();
+    setModal(null);
+    flash('Property duplicated with its audit data');
+  };
+
+  const exportAll = () => {
+    downloadCSVAll(state.properties);
+    setModal(null);
+    flash(`Extracted ${state.properties.length} properties → CSV`);
   };
 
   const resetProperty = () => {
@@ -453,11 +683,13 @@ function App() {
     flash('Checklist wiped to zero');
   };
 
-  const deleteProperty = () => {
+  const deleteProperty = (id) => {
     setState((prev) => {
-      const remaining = prev.properties.filter((p) => p.id !== prev.activeId);
+      const remaining = prev.properties.filter((p) => p.id !== id);
       if (!remaining.length) return defaultState();
-      return { ...prev, activeId: remaining[0].id, properties: remaining };
+      /* Only move the operative if the ground moved under them. */
+      const activeId = prev.activeId === id ? remaining[0].id : prev.activeId;
+      return { ...prev, activeId, properties: remaining };
     });
     setModal(null);
     flash('Property profile purged');
@@ -495,42 +727,32 @@ function App() {
           </span>
         </div>
 
-        {/* Multi-node selector */}
+        {/* Multi-node selector. The roster behind it carries progress, deficit
+            counts and per-property actions, so the header only has to name the
+            unit the operative is standing in. */}
         <div className="flex items-stretch gap-2 px-3 pt-2.5">
-          <div className="relative min-w-0 flex-1">
-            <select
-              aria-label="Active property"
-              value={property.id}
-              onChange={(e) => selectProperty(e.target.value)}
-              className="w-full appearance-none truncate rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-3 pr-9 text-sm font-semibold text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-            >
-              {state.properties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={16}
-              aria-hidden="true"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
-            />
-          </div>
           <button
             type="button"
-            onClick={() => setModal('new')}
+            onClick={() => setModal({ type: 'properties' })}
+            aria-haspopup="dialog"
+            aria-label={`Active property: ${property.name}. Switch or manage properties.`}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-3 pr-2.5 text-left transition-colors hover:border-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70"
+          >
+            <span className="truncate text-sm font-semibold text-slate-100">{property.name}</span>
+            {state.properties.length > 1 && (
+              <span className="shrink-0 rounded border border-slate-700 px-1 py-px font-mono text-[10px] text-slate-500">
+                {state.properties.findIndex((p) => p.id === property.id) + 1}/{state.properties.length}
+              </span>
+            )}
+            <ChevronDown size={16} aria-hidden="true" className="ml-auto shrink-0 text-slate-500" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal({ type: 'new' })}
             aria-label="Add property profile"
             className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-950 transition-colors hover:bg-white active:scale-95"
           >
             <Plus size={22} strokeWidth={2.8} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setModal('delete')}
-            aria-label="Delete active property profile"
-            className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-500 transition-colors hover:border-red-500/50 hover:text-red-400"
-          >
-            <Trash2 size={17} aria-hidden="true" />
           </button>
         </div>
 
@@ -600,7 +822,7 @@ function App() {
           </button>
           <button
             type="button"
-            onClick={() => setModal('reset')}
+            onClick={() => setModal({ type: 'reset' })}
             aria-label="Reset this checklist"
             className="grid w-[52px] shrink-0 place-items-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-400"
           >
@@ -621,7 +843,21 @@ function App() {
         </div>
       )}
 
-      {modal === 'new' && (
+      {modal?.type === 'properties' && (
+        <PropertySheet
+          properties={state.properties}
+          activeId={property.id}
+          onClose={() => setModal(null)}
+          onSelect={selectProperty}
+          onNew={() => setModal({ type: 'new' })}
+          onRename={renameProperty}
+          onDuplicate={duplicateProperty}
+          onDelete={(id) => setModal({ type: 'delete', id })}
+          onExportAll={exportAll}
+        />
+      )}
+
+      {modal?.type === 'new' && (
         <Modal title="New Property Node" onClose={() => setModal(null)}>
           <p className="mb-4 text-sm leading-relaxed text-slate-400">
             Clones the master checklist — {stats.total} assets across {SECTORS.length} sectors —
@@ -653,7 +889,7 @@ function App() {
         </Modal>
       )}
 
-      {modal === 'reset' && (
+      {modal?.type === 'reset' && (
         <Modal title="Nuclear Reset" tone="danger" onClose={() => setModal(null)}>
           <ConfirmPhrase
             phrase="RESET"
@@ -676,30 +912,71 @@ function App() {
         </Modal>
       )}
 
-      {modal === 'delete' && (
-        <Modal title="Purge Property" tone="danger" onClose={() => setModal(null)}>
-          <ConfirmPhrase
-            phrase="DELETE"
-            action="Purge profile"
-            onConfirm={deleteProperty}
-            onClose={() => setModal(null)}
-            prompt={
+      {modal?.type === 'delete' && (() => {
+        const target = state.properties.find((p) => p.id === modal.id);
+        if (!target) return null;
+        const targetStats = computeStats(target);
+        const audited = targetStats.verified + targetStats.deficit > 0;
+        const tail = (
+          <p className="text-slate-400">
+            {state.properties.length === 1
+              ? 'This is your last profile — a blank one will be provisioned in its place.'
+              : `${state.properties.length - 1} other propert${state.properties.length === 2 ? 'y' : 'ies'} will remain.`}
+          </p>
+        );
+        const lead = (
+          <p>
+            Permanently removes the profile{' '}
+            <span className="font-mono font-bold text-slate-100">{target.name}</span>
+            {audited ? ' and all of its audit data.' : '. Nothing has been audited on it yet.'}
+          </p>
+        );
+
+        return (
+          <Modal title="Purge Property" tone="danger" onClose={() => setModal(null)}>
+            {/* An untouched profile has nothing to lose, so gating it behind a
+                typed phrase is friction for its own sake. One that carries a
+                real walkthrough gets the full gate. */}
+            {audited ? (
+              <ConfirmPhrase
+                phrase="DELETE"
+                action="Purge profile"
+                onConfirm={() => deleteProperty(target.id)}
+                onClose={() => setModal(null)}
+                prompt={
+                  <>
+                    {lead}
+                    <p className="text-slate-400">
+                      {targetStats.verified} verified and {targetStats.deficit} deficit records will
+                      be destroyed. This cannot be undone.
+                    </p>
+                    {tail}
+                  </>
+                }
+              />
+            ) : (
               <>
-                <p>
-                  Permanently removes the profile{' '}
-                  <span className="font-mono font-bold text-slate-100">{property.name}</span> and
-                  all of its audit data.
-                </p>
-                <p className="text-slate-400">
-                  {state.properties.length === 1
-                    ? 'This is your last profile — a blank one will be provisioned in its place.'
-                    : `${state.properties.length - 1} other propert${state.properties.length === 2 ? 'y' : 'ies'} will remain.`}
-                </p>
+                <div className="mb-4 space-y-2 text-sm leading-relaxed text-slate-300">
+                  {lead}
+                  {tail}
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setModal(null)} className={btn.ghost}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteProperty(target.id)}
+                    className={btn.danger}
+                  >
+                    Purge profile
+                  </button>
+                </div>
               </>
-            }
-          />
-        </Modal>
-      )}
+            )}
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

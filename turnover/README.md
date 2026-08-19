@@ -21,6 +21,7 @@ with the service worker, the console boots and runs with the network fully down.
 | `manifest.webmanifest` | PWA install metadata (generated) |
 | `icon-*.png` | Icon set (generated from an inline SVG by `npm run icons`) |
 | `src/inventory.js` | The master checklist — 69 assets across 12 spatial sectors |
+| `tools/verify-checklist.mjs` | Asserts the checklist still matches the source document |
 | `src/store.js` | Persistence, derived metrics, CSV extraction |
 | `src/app.jsx` | UI |
 | `src/styles.css` | Tailwind entry + base layer |
@@ -33,11 +34,36 @@ npm install
 npm run build     # -> index.html, sw.js, manifest.webmanifest
 npm run serve     # build, then preview on http://localhost:8080
 npm run icons     # regenerate the PNG icon set (only if the mark changes)
+npm run verify    # check the checklist against the source document
+npm test          # drive the built page through the browser suite
 ```
 
 The build also computes SHA-256 hashes of the inlined script and style and
 writes them into a strict `Content-Security-Policy` meta tag, so the page
 carries no `unsafe-inline`.
+
+## The property roster
+
+The header names the unit you are standing in; tapping it opens the roster,
+which is where property management lives. Each row carries live progress, a
+deficit count and how stale the audit is, so you can see which of eleven units
+still needs a walkthrough without opening any of them. The active property is
+scrolled into view on open, and a filter box appears past five properties.
+
+Per-property actions sit behind the `⋯` on each row:
+
+- **Rename** — inline, no separate dialog.
+- **Duplicate** — copies the audit data too, and lands the copy directly beneath
+  its original. Built for a block of identical units where the second
+  walkthrough starts from the first; the copy is a deep clone, so editing it
+  never touches the original.
+- **Delete** — an untouched profile goes on a single confirm; one carrying a
+  real walkthrough requires typing `DELETE`, and the dialog says exactly how
+  many verified and deficit records die with it.
+
+The roster footer also exports **every** property into one CSV — same columns,
+with the Property Name column separating them, so a portfolio pivots in one
+pass. It stays disabled until there are at least two properties.
 
 ## Behaviour worth knowing
 
@@ -76,7 +102,17 @@ than a formula.
 
 ## Changing the checklist
 
-Edit `src/inventory.js` and rebuild. Give every new item a **stable, unique
-`id`** — that string is the persistence key and the thing that keeps existing
-audits intact. Per-item options: `fields: ['brand','model','serial']`,
-`qty: true`, `condition: true`, and a `hint` string.
+Edit `src/inventory.js`, then run `npm run verify && npm run build`.
+
+Give every new item a **stable, unique `id`** — that string is the persistence
+key and the thing that keeps existing audits intact. Per-item options:
+`fields: ['brand','model','serial']`, `qty: true`, `condition: true`, and a
+`hint` string.
+
+`npm run verify` holds the client's source document transcribed section by
+section and fails if an asset goes missing, lands in the wrong room, or loses a
+capture field the document asked for. It also prints the capture fields that go
+**beyond** the source — quantity boxes on dinnerware, serial capture on the TV,
+washer and dryer — so those additions stay visible instead of drifting in
+unnoticed. Update the `SOURCE` constant only when the client's document itself
+changes.
