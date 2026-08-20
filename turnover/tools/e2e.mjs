@@ -59,7 +59,7 @@ check('69 assets rendered', (await rows.count()) === 69, String(await rows.count
 check('12 sector headers', (await page.locator('main section > header').count()) === 12);
 
 /* ── offline phase ────────────────────────────────────────────────────── */
-check('phase starts Offline', (await page.getByText('Offline', { exact: true }).count()) === 1);
+check('status starts Not started', (await page.getByText('Not started', { exact: true }).count()) === 1);
 const bar = page.locator('[role=progressbar] > div');
 check('progress bar at 0%', (await bar.evaluate((el) => el.style.width)) === '0%');
 
@@ -75,7 +75,7 @@ await box.click();
 check('tap 1 -> verified', (await box.getAttribute('aria-checked')) === 'true');
 check('progress advances', (await bar.evaluate((el) => el.style.width)) === '1%',
       await bar.evaluate((el) => el.style.width));
-check('phase -> In Progress', (await page.getByText('In Progress', { exact: true }).count()) === 1);
+check('status -> In progress', (await page.getByText('In progress', { exact: true }).count()) === 1);
 
 /* spec fields appear for the refrigerator */
 check('spec fields revealed', (await page.locator('#k-refrigerator-serial').count()) === 1);
@@ -151,7 +151,7 @@ await openRoster();
 check('property count = 2', (await rosterRows().count()) === 2);
 await page.getByLabel('Close').click();
 check('new property is active', (await page.getByLabel(/^Active property: Seaside Villa 4B/).count()) === 1);
-check('new property is unverified', (await page.getByText('Offline', { exact: true }).count()) === 1);
+check('new property is unverified', (await page.getByText('Not started', { exact: true }).count()) === 1);
 check('new property has no carried-over notes',
       (await page.locator('#k-refrigerator-note').count()) === 0);
 await openRoster();
@@ -242,7 +242,7 @@ for (const b of await page.locator('[role=checkbox]').all()) {
   else if (st === 'mixed') { await b.click(); await b.click(); }
 }
 await page.waitForTimeout(200);
-check('100% -> Verified phase', (await page.getByText('Verified', { exact: true }).count()) >= 1);
+check('100% clean -> Ready', (await page.getByText('Ready', { exact: true }).count()) >= 1);
 check('progress bar full', (await bar.evaluate((el) => el.style.width)) === '100%');
 await page.screenshot({ path: SHOTS + '/04-verified.png' });
 
@@ -279,10 +279,10 @@ check('reset arms on exact phrase (case-insensitive)', await wipe.isEnabled());
 await page.screenshot({ path: SHOTS + '/05-reset-modal.png' });
 await wipe.click();
 await page.waitForTimeout(200);
-check('reset returns to Offline', (await page.getByText('Offline', { exact: true }).count()) === 1);
+check('reset returns to Not started', (await page.getByText('Not started', { exact: true }).count()) === 1);
 check('reset cleared notes', (await page.locator('#k-refrigerator-note').count()) === 0);
 await page.reload({ waitUntil: 'networkidle' });
-check('reset persisted', (await page.getByText('Offline', { exact: true }).count()) === 1);
+check('reset persisted', (await page.getByText('Not started', { exact: true }).count()) === 1);
 await openRoster();
 check('other property survived reset', (await rosterRows().count()) === 2);
 await page.getByLabel('Close').click();
@@ -307,6 +307,9 @@ console.log('\npar levels + audit ergonomics');
   await c.addInitScript(() => {
     window.__printed = 0;
     window.print = () => { window.__printed += 1; };
+    /* Headless has no share sheet; stand one in so the payload is assertable. */
+    window.__shared = null;
+    navigator.share = async (data) => { window.__shared = data; };
   });
   const pg = await c.newPage();
   const errs = [];
@@ -412,13 +415,39 @@ console.log('\npar levels + audit ergonomics');
   await pg.waitForTimeout(200);
   check('findings sheet totals the claim', (await pg.getByText('$240.00').count()) >= 1);
   check('findings sheet counts units short', (await pg.getByText('Units short').count()) === 1);
+  check('findings sheet states the verdict in words',
+        (await pg.getByText(/not yet checked$/).count()) === 1);
+
+  /* --- the frictionless path: a summary he reads without opening anything --- */
+  await pg.fill('#signoff-name', 'J. Rivera');
+  await pg.getByRole('button', { name: 'Send update' }).click();
+  await pg.waitForTimeout(400);
+  const shared = await pg.evaluate(() => window.__shared);
+  check('share sheet receives a summary', Boolean(shared?.text));
+  if (shared) {
+    check('summary names the property and the auditor',
+          shared.text.startsWith('Unit 01') && shared.text.includes('J. Rivera'));
+    check('summary leads with the verdict, not a table',
+          /^(NOT STARTED|IN PROGRESS|ISSUES FOUND|READY):/m.test(shared.text),
+          shared.text.split('\n')[3]);
+    check('summary lists each finding in plain words',
+          shared.text.includes('- Grill: Firebox rusted through ($240.00)') &&
+          shared.text.includes('- Hangers: short 7 of 30'));
+    check('summary is short enough to read in a message',
+          shared.text.split('\n').length <= 20, `${shared.text.split('\n').length} lines`);
+    check('summary carries no markup a texting app would mangle',
+          !/[<>*_`|]/.test(shared.text));
+  }
+  check('share reports success', (await pg.locator('[role=status]').innerText()).includes('SENT'));
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(200);
   await pg.fill('#signoff-name', 'J. Rivera');
   await pg.screenshot({ path: SHOTS + '/13-findings.png' });
 
   /* The report prints from a same-origin iframe, which INHERITS this page's
      CSP. Assert it is actually styled, not merely present — an unhashed
      stylesheet is refused silently and the PDF comes out as naked text. */
-  await pg.getByRole('button', { name: /Save as PDF/ }).click();
+  await pg.getByRole('button', { name: /^PDF/ }).click();
   await pg.waitForTimeout(1200);
   const frame = pg.frames()[1];
   check('print preview is created', Boolean(frame));
@@ -505,10 +534,38 @@ console.log('\npar levels + audit ergonomics');
   check('copying pars does not copy the counts',
         (await pg.locator('#row-u-forks input[aria-label^="Counted"]').inputValue()) === '');
   check('copying pars leaves the target unaudited',
-        (await pg.getByText('Offline', { exact: true }).count()) === 1);
+        (await pg.getByText('Not started', { exact: true }).count()) === 1);
   await pg.screenshot({ path: SHOTS + '/14-copy-counts.png' });
 
   check('no page errors across the counting flow', errs.length === 0, errs.slice(0, 2).join(' / '));
+  await c.close();
+}
+
+/* ══ 1c. Share fallback where there is no share sheet ══════════════════ */
+console.log('\nshare fallback (desktop / insecure context)');
+{
+  const c = await browser.newContext({
+    viewport: { width: 1100, height: 900 },
+    permissions: ['clipboard-read', 'clipboard-write'],
+  });
+  /* No navigator.share at all — the desktop and plain-http case. */
+  await c.addInitScript(() => {
+    delete navigator.share;
+    window.print = () => {};
+  });
+  const pg = await c.newPage();
+  await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await pg.getByLabel('Flag deficit on Toaster').click();
+  await pg.fill('#k-toaster-note', 'Element dead');
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.getByRole('button', { name: 'Send update' }).click();
+  await pg.waitForTimeout(400);
+  const toast = await pg.locator('[role=status]').innerText().catch(() => '');
+  check('falls back to the clipboard without a share sheet',
+        /COPIED/.test(toast), toast.slice(0, 60));
+  const clip = await pg.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  check('the copied text is the summary itself',
+        clip.includes('Toaster') && clip.includes('Element dead'), clip.slice(0, 40));
   await c.close();
 }
 

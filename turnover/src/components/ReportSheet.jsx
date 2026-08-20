@@ -4,14 +4,15 @@
  * ========================================================================= */
 
 import React, { useState } from 'react';
-import { AlertTriangle, FileDown, PenLine, Table2 } from 'lucide-react';
+import { FileDown, PenLine, Send, Table2 } from 'lucide-react';
 
-import { computeStats, deficitReport, formatMoney } from '../store.js';
+import { computeStats, deficitReport, formatMoney, verdict } from '../store.js';
 import { Modal, btn, input } from '../ui.jsx';
 
-export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV, onPrintPDF, exporting }) {
+export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV, onPrintPDF, onShare, exporting }) {
   const report = deficitReport(property);
   const stats = computeStats(property);
+  const v = verdict(property);
   const [name, setName] = useState(property.signedOffBy || auditor || '');
 
   /* Sign and export in one gesture. The name is handed to the exporter
@@ -25,6 +26,19 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
 
   return (
     <Modal title="Findings" subtitle={property.name} onClose={onClose} flush wide>
+      {/* The answer, before any numbers. This is what gets sent, so the
+          operative should see exactly what the manager will read. */}
+      <div
+        style={{ '--v': v.rgb }}
+        className="border-b border-slate-800 bg-[rgb(var(--v)/0.1)] px-4 py-3"
+      >
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[rgb(var(--v))]">
+          {v.label}
+        </p>
+        <p className="mt-0.5 text-[17px] font-bold leading-tight text-slate-100">{v.headline}</p>
+        <p className="mt-0.5 text-[12px] text-slate-400">{v.detail}</p>
+      </div>
+
       <div className={`grid gap-px bg-slate-800 ${report.shortUnits ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {[
           { value: `${stats.percent}%`, label: 'Complete', tone: 'text-slate-100' },
@@ -40,14 +54,6 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           </div>
         ))}
       </div>
-
-      {stats.pending > 0 && (
-        <p className="flex items-start gap-2 border-b border-slate-800 bg-amber-500/10 px-4 py-2.5 text-[12px] leading-relaxed text-amber-300">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-          {stats.pending} asset{stats.pending > 1 ? 's have' : ' has'} not been audited yet. They
-          will export as “Pending”, not as verified.
-        </p>
-      )}
 
       {report.count === 0 ? (
         <p className="px-4 py-10 text-center text-sm leading-relaxed text-slate-400">
@@ -73,9 +79,11 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
                 {line.sector}
                 {line.short > 0 && ` · short ${line.short} of ${line.expected}`}
               </p>
+              {/* A shortfall is already the finding — "no note recorded"
+                  underneath it reads as though something is missing. */}
               {line.note ? (
                 <p className="mt-1.5 text-[13px] leading-snug text-slate-300">{line.note}</p>
-              ) : (
+              ) : line.short > 0 ? null : (
                 <p className="mt-1.5 text-[13px] italic text-slate-600">No note recorded</p>
               )}
               {line.condition && (
@@ -108,33 +116,43 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           </span>
         </label>
 
-        {/* PDF first: it is the only format that opens the same way on every
-            phone and desktop, needs no spreadsheet app, and cannot be nudged
-            out of shape by whoever opens it. */}
+        {/* Nothing to open, nothing to install, readable on a lock screen —
+            the shortest path from a finished walkthrough to a manager knowing
+            where the unit stands. Works mid-audit too. */}
         <button
           type="button"
-          onClick={() => signAndExport(onPrintPDF)}
-          disabled={exporting}
+          onClick={() => signAndExport(onShare)}
           className={`${btn.primary} flex w-full items-center justify-center gap-2`}
         >
-          <FileDown size={16} aria-hidden="true" />
-          {exporting ? 'Preparing…' : 'Save as PDF'}
+          <Send size={16} aria-hidden="true" />
+          Send update
         </button>
         <p className="text-center text-[11px] leading-relaxed text-slate-500">
-          Opens your print dialog — choose <span className="text-slate-300">Save as PDF</span>,
-          then attach it to an email. This is the one to send.
+          A short plain-text rundown, straight into a text or email. He reads it
+          without opening anything.
         </p>
 
-        <button
-          type="button"
-          onClick={() => signAndExport(onExportCSV)}
-          className={`${btn.ghost} flex w-full items-center justify-center gap-2`}
-        >
-          <Table2 size={16} aria-hidden="true" />
-          Spreadsheet (CSV)
-        </button>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => signAndExport(onPrintPDF)}
+            disabled={exporting}
+            className={`${btn.ghost} flex flex-1 items-center justify-center gap-2`}
+          >
+            <FileDown size={16} aria-hidden="true" />
+            {exporting ? 'Preparing…' : 'PDF'}
+          </button>
+          <button
+            type="button"
+            onClick={() => signAndExport(onExportCSV)}
+            className={`${btn.ghost} flex flex-1 items-center justify-center gap-2`}
+          >
+            <Table2 size={16} aria-hidden="true" />
+            CSV
+          </button>
+        </div>
         <p className="text-center text-[11px] leading-relaxed text-slate-500">
-          For your own records or anyone who wants to sort and filter it.
+          PDF for the formal record · CSV for spreadsheets
         </p>
       </div>
     </Modal>

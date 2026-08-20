@@ -14,10 +14,11 @@ import {
   DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, backupFilename, buildBackup,
   cloneProperty, computeStats, csvFilename, defaultState, deficitReport, downloadCSV,
   downloadCSVAll, downloadText, getItem, isBlank, loadState, makeProperty, parseBackup,
-  phaseOf, probeStorage, saveState, statusFromCount,
+  probeStorage, saveState, statusFromCount, verdict,
 } from './store.js';
-import { buildReport } from './report.js';
+import { buildReport, buildSummaryText, summarySubject } from './report.js';
 import { printDocument } from './print.js';
+import { shareText } from './share.js';
 import { ConfirmPhrase, Modal, btn, input } from './ui.jsx';
 import { Sector } from './components/Sector.jsx';
 import { CopyCountsSheet } from './components/CopyCountsSheet.jsx';
@@ -69,8 +70,12 @@ function App() {
   const property =
     state.properties.find((p) => p.id === state.activeId) || state.properties[0];
   const stats = useMemo(() => computeStats(property), [property]);
-  const phase = phaseOf(stats);
   const report = useMemo(() => deficitReport(property), [property]);
+  /* The header states the same verdict the manager will receive. A unit with
+   * every asset checked and two faults is not "in progress" — it is done, and
+   * it has issues; saying otherwise sends the operative looking for work that
+   * does not exist. */
+  const v = useMemo(() => verdict(property), [property]);
 
   /* --- toast + undo --------------------------------------------------- */
   const runPendingCleanup = useCallback(() => {
@@ -281,6 +286,23 @@ function App() {
     flash(`Extracted ${state.properties.length} properties → CSV`);
   };
 
+  const share = async (signedBy) => {
+    const target = signedProperty(signedBy);
+    const result = await shareText({
+      title: summarySubject(target),
+      text: buildSummaryText(target, report),
+    });
+    if (result === 'cancelled') return;
+    setModal(null);
+    flash(
+      result === 'shared'
+        ? 'Update sent'
+        : result === 'copied'
+          ? 'Summary copied — paste it into a message'
+          : 'Could not share on this device'
+    );
+  };
+
   const printPDF = async (signedBy) => {
     setExporting(true);
     try {
@@ -355,7 +377,7 @@ function App() {
     <div className="mx-auto flex h-[100dvh] w-full max-w-xl flex-col overflow-hidden border-slate-800 bg-slate-950 text-slate-200 sm:border-x">
       {/* ── Command header ─────────────────────────────────────────────── */}
       <header
-        style={{ '--phase': phase.rgb }}
+        style={{ '--phase': v.rgb }}
         className="z-30 shrink-0 border-b border-slate-800 bg-slate-900/95 backdrop-blur-md"
       >
         <div style={{ paddingTop: 'env(safe-area-inset-top)' }} />
@@ -371,7 +393,7 @@ function App() {
           <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-[rgb(var(--phase)/0.4)] bg-[rgb(var(--phase)/0.12)] px-2.5 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--phase))]" aria-hidden="true" />
             <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[rgb(var(--phase))]">
-              {phase.label}
+              {v.label}
             </span>
           </span>
         </div>
@@ -646,6 +668,7 @@ function App() {
           onSignOff={signOff}
           onExportCSV={exportCSV}
           onPrintPDF={printPDF}
+          onShare={share}
         />
       )}
 

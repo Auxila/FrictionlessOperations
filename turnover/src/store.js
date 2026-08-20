@@ -194,17 +194,6 @@ export function computeStats(property) {
   };
 }
 
-/* Offline -> In Progress -> Verified, per the metric-validation spec. */
-export function phaseOf(stats) {
-  if (stats.verified === 0 && stats.deficit === 0) {
-    return { key: 'offline', label: 'Offline', rgb: '100 116 139' };   // slate-500
-  }
-  if (stats.verified < stats.total) {
-    return { key: 'progress', label: 'In Progress', rgb: '245 158 11' }; // amber-500
-  }
-  return { key: 'verified', label: 'Verified', rgb: '34 197 94' };      // green-500
-}
-
 export function sectorStats(property, sector) {
   let verified = 0;
   let deficit = 0;
@@ -286,6 +275,68 @@ export function parseMoney(value) {
 
 export const formatMoney = (n) =>
   n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+
+/* --- verdict ----------------------------------------------------------------
+ * The one thing a manager actually wants: can I put a guest in this unit? He
+ * should not have to add up tiles or read a table to find out, so the answer is
+ * computed once and stated in words at the top of everything we send.
+ *
+ * Incomplete outranks issues: an unfinished walkthrough cannot promise the unit
+ * is fine, and saying "2 issues" about a half-audited unit would imply it can. */
+export function verdict(property) {
+  const stats = computeStats(property);
+  const report = deficitReport(property);
+  const money = report.claim > 0 ? ` · ${formatMoney(report.claim)} to resolve` : '';
+
+  if (stats.pending === stats.total) {
+    return {
+      key: 'notstarted',
+      label: 'Not started',
+      headline: 'Walkthrough not started',
+      detail: `${stats.total} assets to check`,
+      rgb: '100 116 139', // slate-500
+      hex: '#475569',
+      tint: '#f8fafc',
+      edge: '#cbd5e1',
+    };
+  }
+  if (stats.pending > 0) {
+    return {
+      key: 'incomplete',
+      label: 'In progress',
+      headline: `${stats.pending} asset${stats.pending === 1 ? '' : 's'} not yet checked`,
+      detail: report.count
+        ? `${stats.verified} verified · ${report.count} issue${report.count === 1 ? '' : 's'} so far${money}`
+        : `${stats.verified} of ${stats.total} verified`,
+      rgb: '245 158 11', // amber-500
+      hex: '#b45309',
+      tint: '#fffbeb',
+      edge: '#fcd34d',
+    };
+  }
+  if (report.count > 0) {
+    return {
+      key: 'issues',
+      label: 'Issues found',
+      headline: `${report.count} issue${report.count === 1 ? '' : 's'} to resolve`,
+      detail: `All ${stats.total} assets checked${money}`,
+      rgb: '239 68 68', // red-500
+      hex: '#b91c1c',
+      tint: '#fef2f2',
+      edge: '#fca5a5',
+    };
+  }
+  return {
+    key: 'ready',
+    label: 'Ready',
+    headline: 'Ready for guests',
+    detail: `All ${stats.total} assets checked, nothing missing or damaged`,
+    rgb: '34 197 94', // green-500
+    hex: '#15803d',
+    tint: '#f0fdf4',
+    edge: '#86efac',
+  };
+}
 
 /* Compact "how stale is this audit" readout for the property list. */
 export function relativeTime(iso) {

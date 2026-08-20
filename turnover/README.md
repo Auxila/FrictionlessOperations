@@ -25,6 +25,7 @@ with the service worker, the console boots and runs with the network fully down.
 | `src/store.js` | Persistence, counts, derived metrics, CSV, backup format |
 | `src/report.js` | The printable report (its stylesheet is CSP-hashed by the build) |
 | `src/print.js` | Renders the report into an off-screen iframe and prints it |
+| `src/share.js` | Native share sheet, with clipboard fallbacks beneath it |
 | `src/app.jsx` | App shell, state, exports |
 | `src/ui.jsx` | Modal / button / field primitives |
 | `src/components/` | AssetRow, Sector, and the four sheets |
@@ -83,11 +84,34 @@ exports. Signing puts your name on both.
 
 ## What to send, and why
 
-**PDF is the one you send a person.** Save as PDF opens the print dialog with
+Everything the manager receives leads with the same computed **verdict** —
+*Ready for guests*, *2 issues to resolve*, *12 assets not yet checked* — stated
+in words before any number. He should never have to add up tiles or read a
+table to learn whether he can put a guest in the unit. The app's own header
+shows the same verdict, so the operative sees exactly what is being sent.
+
+Incomplete outranks issues: a half-finished walkthrough cannot promise a unit
+is fine, and reporting "2 issues" on one would imply it can.
+
+**Send update is the fastest path, during or after.** It puts a short plain-text
+rundown into the native share sheet — Messages, WhatsApp, Mail, whatever he
+uses. No attachment, no app, no zooming; he reads it where it lands, on a lock
+screen if that is all he opens. It works mid-walkthrough too, so "kitchen's
+done, two things missing" costs two taps. Where there is no share sheet
+(desktop, or plain http on a LAN) it copies to the clipboard instead and says
+so, with an `execCommand` fallback beneath the async clipboard for insecure
+contexts.
+
+The summary is deliberately plain: no markdown, no emoji, nothing that arrives
+as literal punctuation in somebody's SMS client. Findings are capped at eight
+with an "…and N more" tail so a message never becomes a wall.
+
+**PDF is the formal record.** Save as PDF opens the print dialog with
 the report already laid out; pick “Save as PDF” and attach the result. It opens
 identically on any phone or desktop with nothing installed, cannot be nudged
-out of shape by whoever opens it, and reads top-down: the unit, the date, the
-totals, the findings in plain English, then the full inventory.
+out of shape by whoever opens it, and reads top-down: the verdict banner, the
+totals, what needs action in plain English, then the full inventory as a
+clearly-labelled appendix he can ignore.
 
 **CSV is for machines and spreadsheets, not for readers.** Sending one to a
 non-technical person invites a specific set of failures: Excel silently rewrites

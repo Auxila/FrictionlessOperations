@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Download, Ellipsis, Hash, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 
-import { computeStats, phaseOf, relativeTime } from '../store.js';
+import { computeStats, relativeTime, verdict } from '../store.js';
 import { Modal, btn, input } from '../ui.jsx';
 
 /* ── Property roster ────────────────────────────────────────────────────── */
@@ -17,7 +17,7 @@ import { Modal, btn, input } from '../ui.jsx';
  * units still needs a walkthrough. */
 function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename, onDuplicate, onDelete, onCopyCounts, rowRef }) {
   const stats = computeStats(property);
-  const phase = phaseOf(stats);
+  const v = verdict(property);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(property.name);
 
@@ -65,7 +65,7 @@ function PropertyRow({ property, active, expanded, onSelect, onExpand, onRename,
         <button
           type="button"
           onClick={onSelect}
-          style={{ '--phase': phase.rgb }}
+          style={{ '--phase': v.rgb }}
           aria-label={`Switch to ${property.name} — ${stats.percent}% verified, ${stats.deficit} deficit`}
           aria-current={active ? 'true' : undefined}
           className="min-w-0 flex-1 px-3 py-3 text-left"

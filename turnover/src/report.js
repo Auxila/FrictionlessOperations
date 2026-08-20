@@ -8,7 +8,7 @@
  * ========================================================================= */
 
 import { SECTORS } from './inventory.js';
-import { DEFICIT, VERIFIED, computeStats, formatMoney, getItem } from './store.js';
+import { DEFICIT, VERIFIED, computeStats, formatMoney, getItem, verdict } from './store.js';
 
 /* Exported so build.mjs can hash it into the page's `style-src`. The print
  * preview runs in a same-origin iframe, which inherits this page's CSP — an
@@ -24,6 +24,17 @@ export const REPORT_STYLES = `
   .sub { margin:0 0 24px; color:#64748b; font-size:13px;
          font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
          text-transform:uppercase; letter-spacing:.09em; }
+  .verdict { border:2px solid; border-radius:10px; padding:16px 18px; margin-bottom:22px; }
+  .v-label { margin:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.16em;
+             font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .v-headline { margin:4px 0 0; font-size:24px; font-weight:700; letter-spacing:-0.01em; color:#0f172a; }
+  .v-detail { margin:4px 0 0; font-size:13px; color:#475569; }
+  .v-ready { border-color:#86efac; background:#f0fdf4; }
+  .v-ready .v-label { color:#15803d; }
+  .v-issues { border-color:#fca5a5; background:#fef2f2; }
+  .v-issues .v-label { color:#b91c1c; }
+  .v-incomplete { border-color:#fcd34d; background:#fffbeb; }
+  .v-incomplete .v-label { color:#b45309; }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:28px; }
   .card { border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; background:#f8fafc; }
   .card b { display:block; font-size:22px; line-height:1.1; }
@@ -45,10 +56,10 @@ export const REPORT_STYLES = `
   .stamp { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
   .shortfall { margin:8px 0 0; font-weight:700; color:#b91c1c; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  .sector-head th { text-align:left; padding:14px 8px 6px; font-size:10px; text-transform:uppercase;
+  .sector-head th { text-align:left; padding:11px 8px 5px; font-size:10px; text-transform:uppercase;
                     letter-spacing:.12em; color:#0f172a; border-bottom:2px solid #cbd5e1; }
   .sector-head span { color:#94a3b8; margin-left:6px; }
-  td { padding:6px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  td { padding:4px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; line-height:1.35; }
   td.status { width:112px; white-space:nowrap; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
               font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   td.detail { color:#64748b; font-size:12px; }
@@ -96,6 +107,50 @@ const fmtDate = (iso) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, HUMAN);
 };
 
+/* ---------------------------------------------------------------------------
+ * SHARE SUMMARY
+ *
+ * The lowest-friction thing a manager can receive: no attachment, no app, no
+ * zooming. It arrives as the body of a text or email and is read where it
+ * lands. Deliberately plain — no markdown, no emoji, nothing that renders as
+ * literal punctuation in somebody's SMS client.
+ * ------------------------------------------------------------------------- */
+
+const MAX_LISTED = 8;
+
+export function buildSummaryText(property, report, at = new Date()) {
+  const v = verdict(property);
+  const stats = computeStats(property);
+  const when = at.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const lines = [
+    property.name,
+    `Turnover ${when}${property.signedOffBy ? ` — ${property.signedOffBy}` : ''}`,
+    '',
+    `${v.label.toUpperCase()}: ${v.headline}`,
+    v.detail,
+  ];
+
+  if (report.count) {
+    lines.push('');
+    for (const line of report.lines.slice(0, MAX_LISTED)) {
+      const what = line.short > 0 ? `short ${line.short} of ${line.expected}` : line.note || 'flagged';
+      const cost = line.cost > 0 ? ` (${formatMoney(line.cost)})` : '';
+      lines.push(`- ${line.label}: ${what}${cost}`);
+    }
+    if (report.count > MAX_LISTED) {
+      lines.push(`- ...and ${report.count - MAX_LISTED} more`);
+    }
+    if (report.claim > 0) {
+      lines.push('', `Replacement value: ${formatMoney(report.claim)}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export const summarySubject = (property) => `Turnover — ${property.name}`;
+
 /* Becomes the PDF's default filename when the reader hits "Save as PDF", so
  * it is written the way a person would name the file. */
 export function reportTitle(property, at = new Date()) {
@@ -108,6 +163,7 @@ export function reportTitle(property, at = new Date()) {
 
 export function buildReport(property, report, options = {}) {
   const stats = computeStats(property);
+  const v = verdict(property);
   const generatedAt = options.generatedAt || new Date();
 
   const deficitCards = report.lines
@@ -178,22 +234,28 @@ export function buildReport(property, report, options = {}) {
   <h1>${esc(property.name)}</h1>
   <p class="sub">Turnover inventory report &middot; generated ${esc(generatedAt.toLocaleString(undefined, HUMAN))}</p>
 
+  <section class="verdict v-${v.key}">
+    <p class="v-label">${esc(v.label)}</p>
+    <p class="v-headline">${esc(v.headline)}</p>
+    <p class="v-detail">${esc(v.detail)}</p>
+  </section>
+
   <div class="cards">
     <div class="card ok"><b>${stats.verified}/${stats.total}</b><span>Verified</span></div>
     <div class="card"><b>${stats.percent}%</b><span>Complete</span></div>
     <div class="card"><b>${report.count}</b><span>Deficits</span></div>
-    <div class="card claim"><b>${esc(formatMoney(report.claim))}</b><span>Replacement value</span></div>
+    <div class="card${report.claim > 0 ? ' claim' : ''}"><b>${esc(formatMoney(report.claim))}</b><span>Replacement value</span></div>
     ${report.shortUnits ? `<div class="card claim"><b>${report.shortUnits}</b><span>Units short</span></div>` : ''}
   </div>
 
-  <h2>Findings${report.count ? ` — ${report.count}` : ''}</h2>
+  <h2>What needs action${report.count ? ` &mdash; ${report.count}` : ''}</h2>
   ${
     report.count
       ? deficitCards
       : '<p class="note muted">No deficits logged. Every audited asset was present and in acceptable condition.</p>'
   }
 
-  <h2>Full inventory</h2>
+  <h2>Appendix &mdash; full inventory</h2>
   <table>${tableHead}${sectorRows}</table>
 
   <div class="signoff">
