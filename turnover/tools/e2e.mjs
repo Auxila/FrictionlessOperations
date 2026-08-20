@@ -557,8 +557,13 @@ console.log('\npar levels + audit ergonomics');
     finding: getComputedStyle(document.querySelector('.fo-report .finding')).backgroundColor,
     sheet: getComputedStyle(document.querySelector('.fo-report .sheet')).backgroundColor,
   }));
+  /* The point is that the stylesheet applied at all — a CSP refusal leaves the
+     UA defaults (h1 at 32px, transparent panels). The exact size is
+     viewport-dependent now that the report tightens up on narrow screens, so
+     assert the range rather than a pixel value. */
   check('report stylesheet applies under the page CSP',
-        styles.h1 === '22px' && styles.finding === 'rgb(254, 242, 242)',
+        parseFloat(styles.h1) > 0 && parseFloat(styles.h1) <= 24 &&
+        styles.finding === 'rgb(254, 242, 242)',
         JSON.stringify(styles));
   check('report styling does not leak into the console',
         await pg.evaluate(() => getComputedStyle(document.body).backgroundColor !== 'rgb(241, 245, 249)'));

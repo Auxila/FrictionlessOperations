@@ -7,7 +7,7 @@
  * src/passcode.js before relying on it for anything.
  */
 export const PASSCODE = {
-  salt: "999467a61beff38909014ad84c049b1d",
+  salt: "",
   iterations: 20000,
-  hash: "79935824e44b1fdbbbc2abb367f34e51ac240ce5072dd11312ce688cc91e018f",
+  hash: "",
 };

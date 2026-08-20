@@ -240,9 +240,22 @@ cannot work should say so, not appear to have done nothing.
 - **Undo** — bulk verify, checklist reset, property purge, count-copy and
   restore all leave a 7-second Undo in the toast.
 
-## The passcode gate — what it is and is not
+## The passcode gate — currently OFF
 
-The console asks for a passcode before it opens. **Be clear about what that
+**There is no passcode.** The console opens straight to the checklist. The
+mechanism is still here and disabled; one command turns it back on:
+
+```bash
+npm run set-passcode -- "some phrase"   # then: npm run build
+npm run set-passcode -- ""              # off again (current state)
+```
+
+Everything below describes what it does when enabled, and — more importantly —
+what it does not do.
+
+### What it is and is not
+
+When enabled, the console asks for a passcode before it opens. **Be clear about what that
 buys**, because it is easy to mistake for security it does not provide.
 
 **This is a door, not a safe.** The console is a static page on a public host.

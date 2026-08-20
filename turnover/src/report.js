@@ -81,6 +81,27 @@ export const REPORT_STYLES = `
            font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
            text-transform:uppercase; letter-spacing:.1em; }
 
+  /* On a phone the report is read on screen before it is ever printed, and
+     24px + 32px of nested padding leaves barely 200px of content on a 320px
+     device. Reclaim it — print overrides all of this below anyway. */
+  @media screen and (max-width: 480px) {
+    .fo-report { padding:10px; }
+    .fo-report .sheet { padding:18px 16px; border-radius:8px; }
+    .fo-report h1 { font-size:20px; }
+    .fo-report .sub { margin-bottom:18px; font-size:12px; }
+    .fo-report .verdict { padding:13px 14px; margin-bottom:18px; }
+    .fo-report .v-headline { font-size:20px; }
+    .fo-report .cards { grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:22px; }
+    .fo-report .card { padding:10px 11px; }
+    .fo-report .card b { font-size:18px; }
+    .fo-report h2 { margin:24px 0 12px; }
+    .fo-report .finding { padding:12px 13px; }
+    .fo-report td, .fo-report .col-head th, .fo-report .sector-head th { padding-left:0; padding-right:6px; }
+    .fo-report td.status { width:84px; font-size:10px; }
+    .fo-report td.detail { font-size:11px; }
+    .fo-report .signoff { gap:10px; }
+  }
+
   @page { margin: 14mm 12mm; }
   @media print {
     /* Print isolation: the console itself disappears and only the report host
