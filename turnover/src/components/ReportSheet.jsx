@@ -46,7 +46,11 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           ...(report.shortUnits
             ? [{ value: report.shortUnits, label: 'Units short', tone: 'text-red-400' }]
             : []),
-          { value: formatMoney(report.claim), label: 'Claim value', tone: report.claim ? 'text-amber-400' : 'text-slate-100' },
+          {
+            value: formatMoney(report.claim),
+            label: report.estimated ? 'Est. value' : 'Claim value',
+            tone: report.claim ? 'text-amber-400' : 'text-slate-100',
+          },
         ].map(({ value, label, tone }) => (
           <div key={label} className="bg-slate-900 px-2 py-3 text-center">
             <p className={`truncate font-mono text-[15px] font-bold tabular-nums ${tone}`}>{value}</p>
@@ -71,6 +75,7 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
                 <p className="truncate text-[15px] font-semibold text-red-200">{line.label}</p>
                 {line.cost > 0 && (
                   <p className="shrink-0 font-mono text-[12px] font-bold tabular-nums text-amber-400">
+                    {line.estimated && <span className="text-slate-500">est. </span>}
                     {formatMoney(line.cost)}
                   </p>
                 )}

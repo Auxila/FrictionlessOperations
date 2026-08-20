@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
 
 import { FIELD_LABELS } from '../inventory.js';
-import { DEFICIT, PENDING, VERIFIED, hasPar, parseCount, shortfall } from '../store.js';
+import { DEFICIT, PENDING, VERIFIED, formatMoney, hasPar, parseCount, shortfall, suggestedCost } from '../store.js';
 import { Field } from '../ui.jsx';
 
 /* Status advances on a single tap: unengaged -> verified -> deficit -> unengaged.
@@ -115,6 +115,7 @@ export function AssetRow({ item, state, onPatch }) {
   const [override, setOverride] = useState(null);
   const open = override ?? autoOpen;
   const short = shortfall(state);
+  const suggestion = suggestedCost(item, state);
 
   return (
     <li
@@ -249,11 +250,22 @@ export function AssetRow({ item, state, onPatch }) {
                 />
               </label>
               {/* Replacement value is what turns a list of gripes into a
-                  defensible number on a deposit claim. */}
-              <Field
-                id={`${item.id}-cost`} label="Replacement $" mono inputMode="decimal"
-                placeholder="0.00" value={state.cost} onChange={set('cost')}
-              />
+                  defensible number on a deposit claim. Pre-filled from the
+                  checklist median; typing over it makes the figure yours. */}
+              <div>
+                <Field
+                  id={`${item.id}-cost`} label="Replacement $" mono inputMode="decimal"
+                  placeholder="0.00"
+                  value={state.cost}
+                  onChange={(v) => onPatch({ cost: v, costAuto: false })}
+                />
+                {state.costAuto && suggestion && (
+                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500">
+                    Est. {suggestion.units > 1 ? `${suggestion.units} × ` : ''}
+                    {formatMoney(suggestion.unit)}
+                  </p>
+                )}
+              </div>
             </>
           )}
         </div>

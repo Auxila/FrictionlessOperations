@@ -378,10 +378,39 @@ console.log('\npar levels + audit ergonomics');
   check('undo restores the sector',
         (await pg.locator('#row-ba-hair-dryer [role=checkbox][aria-checked=false]').count()) === 1);
 
-  /* --- filters --- */
+  /* --- a deficit prices itself from the checklist median --- */
   await pg.getByLabel('Flag deficit on Grill').click();
+  await pg.waitForTimeout(200);
+  check('flagging a deficit pre-fills the replacement cost',
+        (await pg.inputValue('#p-grill-cost')) === '400',
+        await pg.inputValue('#p-grill-cost'));
+  check('the estimate shows its basis',
+        (await pg.locator('#row-p-grill').getByText(/^Est\. \$400/).count()) === 1);
+  /* Hangers are 7 short at $2 each — the estimate tracks the shortfall. */
+  check('a shortfall prices per missing unit',
+        (await pg.inputValue('#b-hangers-cost')) === '14',
+        await pg.inputValue('#b-hangers-cost'));
+  check('the per-unit basis is shown',
+        (await pg.locator('#row-b-hangers').getByText('Est. 7 × $2.00').count()) === 1);
+  await pg.locator('#row-b-hangers input[aria-label^="Counted"]').fill('25');
+  await pg.waitForTimeout(250);
+  check('the estimate follows the count',
+        (await pg.inputValue('#b-hangers-cost')) === '10',
+        await pg.inputValue('#b-hangers-cost'));
+  await pg.locator('#row-b-hangers input[aria-label^="Counted"]').fill('23');
+  await pg.waitForTimeout(250);
+
   await pg.fill('#p-grill-note', 'Firebox rusted through');
   await pg.fill('#p-grill-cost', '240');
+  await pg.waitForTimeout(250);
+  check('a typed price is left alone afterwards', await (async () => {
+    await pg.getByLabel('Clear deficit on Grill').click();
+    await pg.getByLabel('Flag deficit on Grill').click();
+    await pg.waitForTimeout(250);
+    return (await pg.inputValue('#p-grill-cost')) === '240';
+  })());
+
+  /* --- filters --- */
   await pg.getByRole('tab', { name: /Deficits/ }).click();
   await pg.waitForTimeout(250);
   check('deficit filter shows only findings',
@@ -427,12 +456,23 @@ console.log('\npar levels + audit ergonomics');
   if (shared) {
     check('summary names the property and the auditor',
           shared.text.startsWith('Unit 01') && shared.text.includes('J. Rivera'));
-    check('summary leads with the verdict, not a table',
-          /^(NOT STARTED|IN PROGRESS|ISSUES FOUND|READY):/m.test(shared.text),
-          shared.text.split('\n')[3]);
-    check('summary lists each finding in plain words',
-          shared.text.includes('- Grill: Firebox rusted through ($240.00)') &&
-          shared.text.includes('- Hangers: short 7 of 30'));
+    check('first line carries property and verdict for a lock-screen preview',
+          /^Unit 01 — .+(issue|checked|guests)/.test(shared.text.split('\n')[0]),
+          shared.text.split('\n')[0]);
+    check('summary splits missing from damaged',
+          shared.text.includes('MISSING') && shared.text.includes('DAMAGED / FAULTY'));
+    check('missing lines state the count and the room',
+          shared.text.includes('- Hangers (Bedroom): 7 of 30 missing'),
+          (/- Hangers[^\n]*/.exec(shared.text) || ['not found'])[0]);
+    check('damaged lines state the fault and the room',
+          shared.text.includes('- Grill (Outdoor): Firebox rusted through'),
+          (/- Grill[^\n]*/.exec(shared.text) || ['not found'])[0]);
+    check('a typed price is not labelled an estimate',
+          /- Grill[^\n]*, \$240\b/.test(shared.text),
+          (/- Grill[^\n]*/.exec(shared.text) || [''])[0]);
+    check('a table price is labelled an estimate',
+          /- Hangers[^\n]*est\. \$14\b/.test(shared.text),
+          (/- Hangers[^\n]*/.exec(shared.text) || [''])[0]);
     check('summary is short enough to read in a message',
           shared.text.split('\n').length <= 20, `${shared.text.split('\n').length} lines`);
     check('summary carries no markup a texting app would mangle',

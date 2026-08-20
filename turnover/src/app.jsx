@@ -10,11 +10,13 @@ import {
 } from 'lucide-react';
 
 import { ALL_ITEMS, SECTORS } from './inventory.js';
+
+const ITEM_BY_ID = new Map(ALL_ITEMS.map((item) => [item.id, item]));
 import {
   DEFICIT, EMPTY_ITEM, PENDING, VERIFIED, backupFilename, buildBackup,
   cloneProperty, computeStats, csvFilename, defaultState, deficitReport, downloadCSV,
   downloadCSVAll, downloadText, getItem, isBlank, loadState, makeProperty, parseBackup,
-  probeStorage, saveState, statusFromCount, verdict,
+  probeStorage, saveState, statusFromCount, suggestedCost, verdict,
 } from './store.js';
 import { buildReport, buildSummaryText, summarySubject } from './report.js';
 import { printDocument } from './print.js';
@@ -122,6 +124,24 @@ function App() {
           if (('counted' in patch || 'expected' in patch) && !('status' in patch)) {
             const derived = statusFromCount(next);
             if (derived) next.status = derived;
+          }
+          /* Price the finding from the checklist's median so nobody has to
+           * invent a number in the field. Applied when an asset first becomes
+           * a deficit and kept in step with the shortfall — but only while the
+           * figure is still ours. A typed number is the operative's and is
+           * never recomputed. */
+          const item = ITEM_BY_ID.get(itemId);
+          if (next.status === DEFICIT && (next.costAuto || !next.cost)) {
+            const suggestion = suggestedCost(item, next);
+            if (suggestion) {
+              next.cost = String(suggestion.total);
+              next.costAuto = true;
+            }
+          } else if (next.status !== DEFICIT && next.costAuto) {
+            /* Cleared the deficit: drop our estimate rather than leaving a
+             * price attached to an asset that is no longer a finding. */
+            next.cost = '';
+            next.costAuto = false;
           }
           if (next.status !== current.status) next.updatedAt = now;
           const items = { ...p.items };

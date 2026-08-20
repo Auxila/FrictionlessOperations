@@ -102,9 +102,56 @@ done, two things missing" costs two taps. Where there is no share sheet
 so, with an `execCommand` fallback beneath the async clipboard for insecure
 contexts.
 
-The summary is deliberately plain: no markdown, no emoji, nothing that arrives
-as literal punctuation in somebody's SMS client. Findings are capped at eight
-with an "…and N more" tail so a message never becomes a wall.
+```
+Seaside Villa 4B — 4 issues to resolve
+
+Turnover Aug 20, 2026 · J. Rivera
+65 of 69 verified
+
+MISSING
+- Wine Glasses (Kitchen): 3 of 8 missing, est. $21
+- Forks (Kitchen): 2 of 12 missing, est. $6
+
+DAMAGED / FAULTY
+- Mattress (Bedroom): Large stain, needs replacing, $850
+- Grill (Outdoor): Firebox rusted through, est. $400
+
+Estimated replacement value: $1,277
+(estimates use standard replacement costs)
+```
+
+Line one carries the property and the verdict together, because that is what a
+lock-screen preview shows. **Missing and damaged are split** — one is a reorder,
+the other a repair — so a manager is not left triaging one undifferentiated
+list, and each line names its room so work can be handed straight to someone.
+It is deliberately plain: no markdown, no emoji, nothing that arrives as literal
+punctuation in somebody's SMS client. Findings cap at ten with an "…and N more"
+tail so a message never becomes a wall.
+
+## Pricing
+
+Nobody should have to invent a number standing in a kitchen. Every asset in
+`src/inventory.js` carries a **`unitCost`** — the median replacement cost of one
+of the thing, US mid-market / rental grade. Flagging a deficit prices it
+automatically, multiplied by the shortfall where a count applies:
+
+> Forks, 2 short at $3 each → **est. $6**
+
+The estimate follows the count as it changes, and the row shows its own basis
+(`Est. 2 × $3.00`) so the figure is never a black box. **Typing over it makes it
+yours** and it is never recomputed — and everything downstream tracks the
+difference: a table price prints as `Est. $400`, a typed one prints as `$400`,
+and the total is labelled "Estimated replacement value" only while it still
+contains estimates. Clearing a deficit drops the estimate rather than leaving a
+price on an asset that is no longer a finding.
+
+Big-ticket figures are anchored to 2026 replacement-cost guides — refrigerator
+$600–2,300, range $600–1,300, washer $700–1,300, mid-range sofa $800–2,000,
+queen mattress ~$600–800 market average, 55" 4K TV $199–299, 2–3 burner gas
+grill $250–450 — with the median taken; housewares are commodity mid-market.
+**They are estimates for triage, not quotations**, and the report says so.
+`unitCost` in `src/inventory.js` is the only place they live: tune them to your
+market and suppliers and everything else follows.
 
 **PDF is the formal record.** Save as PDF opens the print dialog with
 the report already laid out; pick “Save as PDF” and attach the result. It opens

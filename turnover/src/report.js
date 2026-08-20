@@ -8,7 +8,7 @@
  * ========================================================================= */
 
 import { SECTORS } from './inventory.js';
-import { DEFICIT, VERIFIED, computeStats, formatMoney, getItem, verdict } from './store.js';
+import { DEFICIT, VERIFIED, computeStats, formatMoney, formatMoneyShort, getItem, verdict } from './store.js';
 
 /* Exported so build.mjs can hash it into the page's `style-src`. The print
  * preview runs in a same-origin iframe, which inherits this page's CSP — an
@@ -68,6 +68,8 @@ export const REPORT_STYLES = `
   tr.s-verified td.status { color:#15803d; }
   tr.s-deficit td.status { color:#b91c1c; font-weight:700; }
   tr.s-pending td.status { color:#94a3b8; }
+  .estnote { margin:18px 0 0; padding:10px 12px; border-left:3px solid #e2e8f0; background:#f8fafc;
+             font-size:11px; line-height:1.5; color:#64748b; }
   .signoff { margin-top:32px; padding-top:16px; border-top:1px solid #e2e8f0;
              display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
              font-size:12px; color:#475569; }
@@ -116,33 +118,58 @@ const fmtDate = (iso) => {
  * literal punctuation in somebody's SMS client.
  * ------------------------------------------------------------------------- */
 
-const MAX_LISTED = 8;
+const MAX_LISTED = 10;
 
 export function buildSummaryText(property, report, at = new Date()) {
   const v = verdict(property);
   const stats = computeStats(property);
   const when = at.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
+  /* Missing and damaged are different jobs — one is a reorder, the other a
+   * repair or a replacement — so they are split rather than run together in
+   * one list a manager has to triage himself. */
+  const missing = report.lines.filter((l) => l.short > 0);
+  const damaged = report.lines.filter((l) => !(l.short > 0));
+  const split = missing.length > 0 && damaged.length > 0;
+
+  /* The first line is what shows in a lock-screen preview, so it carries the
+   * property and the verdict on its own. */
   const lines = [
-    property.name,
-    `Turnover ${when}${property.signedOffBy ? ` — ${property.signedOffBy}` : ''}`,
+    `${property.name} — ${v.headline}`,
     '',
-    `${v.label.toUpperCase()}: ${v.headline}`,
-    v.detail,
+    `Turnover ${when}${property.signedOffBy ? ` · ${property.signedOffBy}` : ''}`,
+    `${stats.verified} of ${stats.total} verified`,
   ];
 
-  if (report.count) {
+  let listed = 0;
+  const section = (title, group) => {
+    if (!group.length) return;
     lines.push('');
-    for (const line of report.lines.slice(0, MAX_LISTED)) {
-      const what = line.short > 0 ? `short ${line.short} of ${line.expected}` : line.note || 'flagged';
-      const cost = line.cost > 0 ? ` (${formatMoney(line.cost)})` : '';
-      lines.push(`- ${line.label}: ${what}${cost}`);
+    if (split) lines.push(title);
+    for (const line of group) {
+      if (listed >= MAX_LISTED) return;
+      listed += 1;
+      const what =
+        line.short > 0
+          ? `${line.short} of ${line.expected} missing`
+          : line.note || line.condition || 'flagged';
+      const price = line.cost > 0 ? `, ${line.estimated ? 'est. ' : ''}${formatMoneyShort(line.cost)}` : '';
+      lines.push(`- ${line.label} (${line.zone}): ${what}${price}`);
     }
-    if (report.count > MAX_LISTED) {
-      lines.push(`- ...and ${report.count - MAX_LISTED} more`);
-    }
-    if (report.claim > 0) {
-      lines.push('', `Replacement value: ${formatMoney(report.claim)}`);
+  };
+
+  section('MISSING', missing);
+  section('DAMAGED / FAULTY', damaged);
+
+  if (report.count > listed) lines.push(`- ...and ${report.count - listed} more`);
+
+  if (report.claim > 0) {
+    lines.push(
+      '',
+      `${report.estimated ? 'Estimated replacement' : 'Replacement'} value: ${formatMoneyShort(report.claim)}`
+    );
+    if (report.estimated) {
+      lines.push('(estimates use standard replacement costs)');
     }
   }
 
@@ -174,9 +201,13 @@ export function buildReport(property, report, options = {}) {
         line.short > 0
           ? `Short ${line.short} — counted ${esc(line.counted)} of ${esc(line.expected)}`
           : null;
-      const meta = [line.condition && esc(line.condition), line.cost > 0 && formatMoney(line.cost)]
-        .filter(Boolean)
-        .join(' &middot; ');
+      const price =
+        line.cost > 0
+          ? line.estimated
+            ? `Est. ${line.short > 1 ? `${line.short} &times; ${formatMoney(line.unitCost)} = ` : ''}${formatMoney(line.cost)}`
+            : formatMoney(line.cost)
+          : null;
+      const meta = [line.condition && esc(line.condition), price].filter(Boolean).join(' &middot; ');
       return `
       <article class="finding">
         <header>
@@ -244,7 +275,7 @@ export function buildReport(property, report, options = {}) {
     <div class="card ok"><b>${stats.verified}/${stats.total}</b><span>Verified</span></div>
     <div class="card"><b>${stats.percent}%</b><span>Complete</span></div>
     <div class="card"><b>${report.count}</b><span>Deficits</span></div>
-    <div class="card${report.claim > 0 ? ' claim' : ''}"><b>${esc(formatMoney(report.claim))}</b><span>Replacement value</span></div>
+    <div class="card${report.claim > 0 ? ' claim' : ''}"><b>${esc(formatMoney(report.claim))}</b><span>${report.estimated ? 'Est. replacement' : 'Replacement'} value</span></div>
     ${report.shortUnits ? `<div class="card claim"><b>${report.shortUnits}</b><span>Units short</span></div>` : ''}
   </div>
 
@@ -257,6 +288,12 @@ export function buildReport(property, report, options = {}) {
 
   <h2>Appendix &mdash; full inventory</h2>
   <table>${tableHead}${sectorRows}</table>
+
+  ${
+    report.estimated
+      ? '<p class="estnote">Figures marked “Est.” use standard mid-market replacement costs for the item, multiplied by the shortfall where a count applies. They are estimates for triage, not quotations.</p>'
+      : ''
+  }
 
   <div class="signoff">
     <div><b>${esc(property.signedOffBy || 'Unsigned')}</b>Audited by</div>

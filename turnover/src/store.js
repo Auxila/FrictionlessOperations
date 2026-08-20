@@ -28,6 +28,7 @@ export const EMPTY_ITEM = {
   serial: '',
   condition: '',
   cost: '',      // replacement value, drives the claim total
+  costAuto: false, // true while `cost` is still the table estimate
   expected: '',  // par level — how many this unit is supposed to have
   counted: '',   // what the operative actually found
   updatedAt: null,
@@ -101,6 +102,7 @@ function sanitizeItem(raw) {
     serial: str(raw.serial),
     condition: str(raw.condition),
     cost: str(raw.cost),
+    costAuto: raw.costAuto === true,
     expected: str(raw.expected),
     /* `qty` was the pre-par-level field name; carry old saves across. */
     counted: str(raw.counted) || str(raw.qty),
@@ -212,6 +214,7 @@ export function deficitReport(property) {
   const lines = [];
   let claim = 0;
   let shortUnits = 0;
+  let estimated = 0;
   for (const item of ALL_ITEMS) {
     const state = getItem(property, item.id);
     if (state.status !== DEFICIT) continue;
@@ -219,10 +222,14 @@ export function deficitReport(property) {
     claim += cost;
     const short = shortfall(state);
     if (short) shortUnits += short;
+    if (state.costAuto && cost > 0) estimated += 1;
     lines.push({
       id: item.id,
       label: item.label,
       sector: item.sectorName,
+      zone: item.zone,
+      estimated: Boolean(state.costAuto),
+      unitCost: item.unitCost,
       note: state.note,
       expected: state.expected,
       counted: state.counted,
@@ -233,7 +240,9 @@ export function deficitReport(property) {
       updatedAt: state.updatedAt,
     });
   }
-  return { lines, claim, shortUnits, count: lines.length };
+  /* `estimated` drives the wording: a total built from table prices is an
+   * estimate and must not be presented as a quote. */
+  return { lines, claim, shortUnits, estimated, count: lines.length };
 }
 
 /* --- counts ----------------------------------------------------------------
@@ -266,6 +275,20 @@ export function statusFromCount(state) {
   return short > 0 ? DEFICIT : VERIFIED;
 }
 
+/* --- pricing ----------------------------------------------------------------
+ * Nobody should have to invent a number standing in a kitchen. The checklist
+ * carries a median unit cost per asset; a deficit prices itself from it, times
+ * the shortfall where a count applies. The moment an operative types over it
+ * the figure is theirs and is never recomputed. */
+
+export function suggestedCost(item, state) {
+  const unit = item?.unitCost;
+  if (!unit) return null;
+  const short = shortfall(state);
+  const units = short && short > 0 ? short : 1;
+  return { unit, units, total: unit * units };
+}
+
 /* Operatives type "45", "$45", "45.00" and "1,250" — all of them mean money. */
 export function parseMoney(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -275,6 +298,16 @@ export function parseMoney(value) {
 
 export const formatMoney = (n) =>
   n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+
+/* Drops ".00" so a text message reads "$406" rather than "$406.00", but keeps
+ * real cents when an operative has entered them. */
+export const formatMoneyShort = (n) =>
+  n.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
 
 /* --- verdict ----------------------------------------------------------------
  * The one thing a manager actually wants: can I put a guest in this unit? He
