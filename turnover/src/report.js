@@ -169,7 +169,7 @@ export function buildSummaryText(property, report, at = new Date()) {
       `${report.estimated ? 'Estimated replacement' : 'Replacement'} value: ${formatMoneyShort(report.claim)}`
     );
     if (report.estimated) {
-      lines.push('(estimates use standard replacement costs)');
+      lines.push('(estimates use median local replacement costs)');
     }
   }
 
@@ -291,7 +291,7 @@ export function buildReport(property, report, options = {}) {
 
   ${
     report.estimated
-      ? '<p class="estnote">Figures marked “Est.” use standard mid-market replacement costs for the item, multiplied by the shortfall where a count applies. They are estimates for triage, not quotations.</p>'
+      ? '<p class="estnote">Figures marked “Est.” use median replacement costs for the item at Panama City retail including 7% Florida sales tax, with outdoor assets priced at salt-air grade, multiplied by the shortfall where a count applies. They are estimates for triage, not quotations.</p>'
       : ''
   }
 

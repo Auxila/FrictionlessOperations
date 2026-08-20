@@ -145,13 +145,38 @@ and the total is labelled "Estimated replacement value" only while it still
 contains estimates. Clearing a deficit drops the estimate rather than leaving a
 price on an asset that is no longer a finding.
 
+### Priced for Mexico Beach, FL
+
+The table is tuned to the Gulf Coast panhandle, not a national average:
+
+- **Basis is Panama City metro shelf price.** There is no big-box retail in
+  Mexico Beach — the nearest Home Depot is ~32 miles up US-98 in Panama City,
+  with Lowe's and Walmart alongside. That is where a replacement actually gets
+  bought, and it sits inside the free appliance-delivery radius, so no freight
+  premium is baked in.
+- **Includes 7% sales tax** (6% Florida + 1% county surtax). Mexico Beach
+  straddles the Bay/Gulf county line and both are 7%, so the split does not
+  matter. These figures are what leaves the bank account, not shelf stickers.
+- **Outdoor assets are priced at salt-air grade** and run well above the
+  national median — powder-coated aluminum and resin wicker rather than steel,
+  solution-dyed cushions that survive UV and mildew, stainless on the grill.
+  Cheap outdoor furniture on the Gulf is a yearly purchase, so the honest
+  replacement cost is the one that lasts a season. Patio chairs $110 → $150,
+  cushions $55 → $80, grill $400 → $515, umbrellas $130 → $180.
+
 Big-ticket figures are anchored to 2026 replacement-cost guides — refrigerator
 $600–2,300, range $600–1,300, washer $700–1,300, mid-range sofa $800–2,000,
 queen mattress ~$600–800 market average, 55" 4K TV $199–299, 2–3 burner gas
-grill $250–450 — with the median taken; housewares are commodity mid-market.
+grill $250–450 — with the median taken, then tax applied; housewares are
+commodity mid-market.
+
+**Revisit after any hurricane season that moves demand.** Panhandle prices for
+appliances and outdoor furniture spike hard after a storm.
+
 **They are estimates for triage, not quotations**, and the report says so.
-`unitCost` in `src/inventory.js` is the only place they live: tune them to your
-market and suppliers and everything else follows.
+`unitCost` in `src/inventory.js` is the only place they live, and the browser
+suite derives its expectations from that table rather than hard-coding dollar
+figures — so retuning prices never breaks a test.
 
 **PDF is the formal record.** Save as PDF opens the print dialog with
 the report already laid out; pick “Save as PDF” and attach the result. It opens

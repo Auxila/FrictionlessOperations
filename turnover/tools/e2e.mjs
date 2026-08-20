@@ -13,6 +13,11 @@ import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+/* Expectations are derived from the checklist, not hard-coded: these prices are
+   meant to be retuned per market, and a reprice must not break the suite. */
+import { ALL_ITEMS } from '../src/inventory.js';
+
+const priceOf = (id) => ALL_ITEMS.find((i) => i.id === id).unitCost;
 
 const PORT = Number(process.env.PORT) || 8099;
 const BASE = `http://localhost:${PORT}/`;
@@ -381,21 +386,25 @@ console.log('\npar levels + audit ergonomics');
   /* --- a deficit prices itself from the checklist median --- */
   await pg.getByLabel('Flag deficit on Grill').click();
   await pg.waitForTimeout(200);
+  const grillPrice = priceOf('p-grill');
+  const hangerPrice = priceOf('b-hangers');
   check('flagging a deficit pre-fills the replacement cost',
-        (await pg.inputValue('#p-grill-cost')) === '400',
+        (await pg.inputValue('#p-grill-cost')) === String(grillPrice),
         await pg.inputValue('#p-grill-cost'));
   check('the estimate shows its basis',
-        (await pg.locator('#row-p-grill').getByText(/^Est\. \$400/).count()) === 1);
-  /* Hangers are 7 short at $2 each — the estimate tracks the shortfall. */
+        (await pg.locator('#row-p-grill')
+          .getByText(new RegExp(`^Est\\. \\$${grillPrice}`)).count()) === 1);
+  /* Hangers are 7 short — the estimate is per missing unit, not per asset. */
   check('a shortfall prices per missing unit',
-        (await pg.inputValue('#b-hangers-cost')) === '14',
+        (await pg.inputValue('#b-hangers-cost')) === String(hangerPrice * 7),
         await pg.inputValue('#b-hangers-cost'));
   check('the per-unit basis is shown',
-        (await pg.locator('#row-b-hangers').getByText('Est. 7 × $2.00').count()) === 1);
+        (await pg.locator('#row-b-hangers')
+          .getByText(`Est. 7 × $${hangerPrice}.00`).count()) === 1);
   await pg.locator('#row-b-hangers input[aria-label^="Counted"]').fill('25');
   await pg.waitForTimeout(250);
   check('the estimate follows the count',
-        (await pg.inputValue('#b-hangers-cost')) === '10',
+        (await pg.inputValue('#b-hangers-cost')) === String(hangerPrice * 5),
         await pg.inputValue('#b-hangers-cost'));
   await pg.locator('#row-b-hangers input[aria-label^="Counted"]').fill('23');
   await pg.waitForTimeout(250);
@@ -471,7 +480,7 @@ console.log('\npar levels + audit ergonomics');
           /- Grill[^\n]*, \$240\b/.test(shared.text),
           (/- Grill[^\n]*/.exec(shared.text) || [''])[0]);
     check('a table price is labelled an estimate',
-          /- Hangers[^\n]*est\. \$14\b/.test(shared.text),
+          new RegExp(`- Hangers[^\n]*est\\. \\$${priceOf('b-hangers') * 7}\\b`).test(shared.text),
           (/- Hangers[^\n]*/.exec(shared.text) || [''])[0]);
     check('summary is short enough to read in a message',
           shared.text.split('\n').length <= 20, `${shared.text.split('\n').length} lines`);
