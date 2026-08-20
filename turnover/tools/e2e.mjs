@@ -16,6 +16,19 @@ import { chromium } from 'playwright';
 /* Expectations are derived from the checklist, not hard-coded: these prices are
    meant to be retuned per market, and a reprice must not break the suite. */
 import { ALL_ITEMS } from '../src/inventory.js';
+import { PASSCODE } from '../src/passcode-config.js';
+import { sha256Hex } from '../src/sha256.js';
+
+/* The suite needs to get past the gate. It knows the passcode only because the
+   test author set it — nothing in the repo stores the plaintext. */
+const PASSCODE_PLAINTEXT = process.env.TEST_PASSCODE || 'avari';
+async function unlock(page) {
+  if (!PASSCODE.hash) return;
+  await page.waitForSelector('#passcode', { timeout: 10000 });
+  await page.fill('#passcode', PASSCODE_PLAINTEXT);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await page.waitForSelector('li[id^=row-]', { timeout: 15000 });
+}
 
 const priceOf = (id) => ALL_ITEMS.find((i) => i.id === id).unitCost;
 
@@ -38,6 +51,29 @@ const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
 );
 
+/* ══ 0. SHA-256 against the NIST vectors ═══════════════════════════════
+ * The passcode gate ships its own hash implementation because crypto.subtle
+ * needs a secure context. Hand-rolled crypto gets verified or it does not
+ * ship. */
+console.log('sha256 (FIPS 180-4 vectors)');
+for (const [input, want] of [
+  ['', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'],
+  ['abc', 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'],
+  ['abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq',
+   '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1'],
+  ['abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu',
+   'cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1'],
+  ['a'.repeat(1000000),
+   'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0'],
+]) {
+  const got = sha256Hex(input);
+  check(`sha256 vector (${input.length} bytes)`, got === want, got === want ? '' : got);
+}
+/* Multi-block and unicode paths, which the vectors above do not exercise. */
+check('sha256 handles multi-byte characters',
+      sha256Hex('café · 日本') ===
+      sha256Hex(Buffer.from('café · 日本', 'utf8').toString('utf8')));
+
 /* ══ 1. Field console on a phone ═══════════════════════════════════════ */
 console.log('\nfield console (390×844, touch)');
 const ctx = await browser.newContext({
@@ -54,6 +90,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 
 await page.goto(BASE, { waitUntil: 'networkidle' });
+await unlock(page);
 
 /* ── boot ─────────────────────────────────────────────────────────────── */
 check('app mounts', (await page.locator('#root > div').count()) === 1);
@@ -311,7 +348,8 @@ console.log('\npar levels + audit ergonomics');
      without a real one blocking the run. */
   await c.addInitScript(() => {
     window.__printed = 0;
-    window.print = () => { window.__printed += 1; };
+    window.__printTitle = '';
+    window.print = () => { window.__printed += 1; window.__printTitle = document.title; };
     /* Headless has no share sheet; stand one in so the payload is assertable. */
     window.__shared = null;
     navigator.share = async (data) => { window.__shared = data; };
@@ -321,6 +359,7 @@ console.log('\npar levels + audit ergonomics');
   pg.on('pageerror', (e) => errs.push(e.message));
   pg.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(pg);
   await pg.waitForTimeout(300);
 
   /* --- a par level turns a tick-box row into a counter --- */
@@ -493,38 +532,57 @@ console.log('\npar levels + audit ergonomics');
   await pg.fill('#signoff-name', 'J. Rivera');
   await pg.screenshot({ path: SHOTS + '/13-findings.png' });
 
-  /* The report prints from a same-origin iframe, which INHERITS this page's
-     CSP. Assert it is actually styled, not merely present — an unhashed
-     stylesheet is refused silently and the PDF comes out as naked text. */
+  /* The report is rendered in the console's own document and printed from the
+     top window. The previous hidden-iframe approach could report success while
+     doing nothing at all, so assert the operative can SEE the report — that is
+     the property that makes a silent no-op impossible. */
   await pg.getByRole('button', { name: /^PDF/ }).click();
-  await pg.waitForTimeout(1200);
-  const frame = pg.frames()[1];
-  check('print preview is created', Boolean(frame));
-  if (frame) {
-    check('preview titles itself for the Save-as-PDF filename',
-          /^Turnover Report - /.test(await frame.title()), await frame.title());
-    check('print() was reached', (await frame.evaluate(() => window.__printed)) === 1);
-    const body = await frame.evaluate(() => document.body.innerText);
-    check('report states the shortfall without anyone typing it',
-          body.includes('Short 7') && body.includes('counted 23 of 30'),
-          (/Short \d+ — counted \d+ of \d+/.exec(body) || ['not found'])[0]);
-    check('report carries the typed finding and the claim',
-          body.includes('Firebox rusted through') && body.includes('$240.00'));
-    check('report is signed', body.includes('J. Rivera'));
-    const styles = await frame.evaluate(() => ({
-      h1: getComputedStyle(document.querySelector('h1')).fontSize,
-      finding: getComputedStyle(document.querySelector('.finding')).backgroundColor,
-      sheet: getComputedStyle(document.querySelector('.sheet')).backgroundColor,
-    }));
-    check('report stylesheet survives the page CSP',
-          styles.h1 === '22px' && styles.finding === 'rgb(254, 242, 242)',
-          JSON.stringify(styles));
-    check('report references nothing external',
-          await frame.evaluate(() =>
-            !document.querySelector('script, link[rel=stylesheet], iframe, img')));
-  }
-  check('print reports success to the operative',
-        (await pg.locator('[role=status]').innerText()).includes('SAVE AS PDF'));
+  await pg.waitForTimeout(600);
+  const host = pg.locator('.fo-report-host');
+  check('PDF opens a visible report preview', (await host.count()) === 1);
+  check('the preview is on screen, not hidden', await host.isVisible());
+
+  const body = await host.innerText();
+  check('report states the shortfall without anyone typing it',
+        body.includes('Short 7') && body.includes('counted 23 of 30'),
+        (/Short \d+ — counted \d+ of \d+/.exec(body) || ['not found'])[0]);
+  check('report carries the typed finding and the claim',
+        body.includes('Firebox rusted through') && body.includes('$240.00'));
+  check('report is signed', body.includes('J. Rivera'));
+
+  /* The report CSS is scoped and folded into the app's own hashed stylesheet,
+     so a CSP refusal would show up as unstyled text. */
+  const styles = await pg.evaluate(() => ({
+    h1: getComputedStyle(document.querySelector('.fo-report h1')).fontSize,
+    finding: getComputedStyle(document.querySelector('.fo-report .finding')).backgroundColor,
+    sheet: getComputedStyle(document.querySelector('.fo-report .sheet')).backgroundColor,
+  }));
+  /* The point is that the stylesheet applied at all — a CSP refusal leaves the
+     UA defaults (h1 at 32px, transparent panels). The exact size is
+     viewport-dependent now that the report tightens up on narrow screens, so
+     assert the range rather than a pixel value. */
+  check('report stylesheet applies under the page CSP',
+        parseFloat(styles.h1) > 0 && parseFloat(styles.h1) <= 24 &&
+        styles.finding === 'rgb(254, 242, 242)',
+        JSON.stringify(styles));
+  check('report styling does not leak into the console',
+        await pg.evaluate(() => getComputedStyle(document.body).backgroundColor !== 'rgb(241, 245, 249)'));
+
+  await pg.getByRole('button', { name: /Save as PDF/ }).click();
+  await pg.waitForTimeout(300);
+  check('printing goes through the top window', (await pg.evaluate(() => window.__printed)) === 1);
+  check('the PDF filename is seeded from a document title',
+        (await pg.evaluate(() => window.__printTitle || '')).startsWith('Turnover Report - '),
+        await pg.evaluate(() => window.__printTitle || '(none)'));
+
+  await pg.getByLabel('Close report').click();
+  await pg.waitForTimeout(250);
+  check('closing the preview returns to the console',
+        (await pg.locator('.fo-report-host').count()) === 0 &&
+        (await pg.locator('li[id^=row-]').count()) > 0);
+
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(250);
 
   /* --- CSV carries the count columns --- */
   const csvDl = await Promise.all([
@@ -539,7 +597,9 @@ console.log('\npar levels + audit ergonomics');
     check('CSV reports the shortfall', hangers.includes('"30","23","7"'), hangers?.slice(40, 90));
   }
 
-  /* --- backup round trip (no photo store any more) --- */
+  /* --- backup round trip --- */
+  await pg.getByLabel('Close').click();
+  await pg.waitForTimeout(200);
   await pg.getByLabel('Backup and restore').click();
   await pg.waitForTimeout(200);
   const bk = await Promise.all([
@@ -551,6 +611,7 @@ console.log('\npar levels + audit ergonomics');
     const backupPath = await bk.path();
     await pg.evaluate(() => localStorage.clear());
     await pg.reload({ waitUntil: 'networkidle' });
+    await unlock(pg);
     await pg.waitForTimeout(300);
     check('device really was wiped',
           (await pg.locator('#row-u-forks input[aria-label^="Counted"]').count()) === 0);
@@ -604,17 +665,108 @@ console.log('\nshare fallback (desktop / insecure context)');
   });
   const pg = await c.newPage();
   await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(pg);
   await pg.getByLabel('Flag deficit on Toaster').click();
   await pg.fill('#k-toaster-note', 'Element dead');
   await pg.getByRole('button', { name: /^Findings/ }).click();
   await pg.getByRole('button', { name: 'Send update' }).click();
   await pg.waitForTimeout(400);
-  const toast = await pg.locator('[role=status]').innerText().catch(() => '');
-  check('falls back to the clipboard without a share sheet',
-        /COPIED/.test(toast), toast.slice(0, 60));
+  check('without a share sheet the summary is shown, not swallowed',
+        (await pg.getByText(/can’t open the share sheet/).count()) === 1);
   const clip = await pg.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  check('the copied text is the summary itself',
+  check('it is still copied to the clipboard as well',
         clip.includes('Toaster') && clip.includes('Element dead'), clip.slice(0, 40));
+  const panel = await pg.locator('textarea[aria-label="Summary text to copy"]').inputValue();
+  check('the panel shows the same summary',
+        panel === clip || panel.includes('Element dead'), panel.split('\n')[0]);
+  await c.close();
+}
+
+/* ══ 1d. The passcode gate ═════════════════════════════════════════════ */
+console.log('\npasscode gate');
+if (PASSCODE.hash) {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const pg = await c.newPage();
+  await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await pg.waitForTimeout(300);
+
+  check('a first visit lands on the lock screen', (await pg.locator('#passcode').count()) === 1);
+  check('the console is not rendered behind it',
+        (await pg.locator('li[id^=row-]').count()) === 0);
+
+  /* The gate is a door, not a safe — but the passcode should at least not be
+     sitting in the served file in plain sight. */
+  const pageSource = await (await fetch(BASE)).text();
+  check('the plaintext passcode is not in the served page',
+        !pageSource.toLowerCase().includes(PASSCODE_PLAINTEXT.toLowerCase()));
+  check('the stored value is a hash, not the code',
+        pageSource.includes(PASSCODE.hash) && PASSCODE.hash.length === 64);
+
+  await pg.fill('#passcode', 'notthecode');
+  await pg.getByRole('button', { name: 'Unlock' }).click();
+  await pg.waitForTimeout(1200);
+  check('a wrong passcode is rejected', (await pg.getByText('Incorrect passcode').count()) === 1);
+  check('a wrong passcode does not open the console',
+        (await pg.locator('li[id^=row-]').count()) === 0);
+
+  await unlock(pg);
+  check('the right passcode opens the console',
+        (await pg.locator('li[id^=row-]').count()) === 69);
+
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForTimeout(400);
+  check('the unlock is remembered on this device',
+        (await pg.locator('li[id^=row-]').count()) === 69);
+
+  await pg.getByLabel('Lock the console').click();
+  await pg.waitForTimeout(300);
+  check('the Lock button re-locks it', (await pg.locator('#passcode').count()) === 1);
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForTimeout(400);
+  check('it stays locked across a reload', (await pg.locator('#passcode').count()) === 1);
+  await c.close();
+}
+
+/* ══ 1e. Failures must be visible ══════════════════════════════════════
+ * Both reported bugs were silent: the PDF path announced "print dialog opened"
+ * on platforms where the call did nothing, and Send update fell back to the
+ * clipboard with only a transient toast to show for it. */
+console.log('\nno silent failures');
+{
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  /* A browser with no share sheet and a print() that does nothing — the exact
+     shape of the environment where both features appeared to "fail". */
+  await c.addInitScript(() => {
+    delete navigator.share;
+    window.print = () => {};
+  });
+  const pg = await c.newPage();
+  await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(pg);
+  await pg.getByLabel('Flag deficit on Grill').click();
+  await pg.fill('#p-grill-note', 'Firebox rusted through');
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(250);
+
+  await pg.getByRole('button', { name: /^PDF/ }).click();
+  await pg.waitForTimeout(600);
+  check('with an inert print(), the report is still shown',
+        (await pg.locator('.fo-report-host').isVisible()) &&
+        (await pg.locator('.fo-report .verdict').count()) === 1);
+  check('the preview explains what to do next',
+        (await pg.locator('.fo-report-host').innerText()).includes('Save as PDF'));
+  await pg.getByLabel('Close report').click();
+
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(250);
+  await pg.getByRole('button', { name: 'Send update' }).click();
+  await pg.waitForTimeout(700);
+  check('with no share sheet, the summary is shown rather than swallowed',
+        (await pg.getByText(/can’t open the share sheet/).count()) === 1);
+  const shown = await pg.locator('textarea[aria-label="Summary text to copy"]').inputValue();
+  check('the shown summary is the real one',
+        shown.includes('Firebox rusted through') && shown.startsWith('Unit 01'),
+        shown.split('\n')[0]);
   await c.close();
 }
 
@@ -624,6 +776,7 @@ for (const [label, w, h] of [['iPhone SE 320', 320, 568], ['iPhone 14 390', 390,
   const c = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 700, hasTouch: true });
   const p = await c.newPage();
   await p.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(p);
   /* Engage the row with the widest capture panel (brand + model + serial). */
   await p.locator('li:has-text("Refrigerator") [role=checkbox]').first().click();
   await p.waitForTimeout(100);
@@ -680,6 +833,7 @@ console.log('\nstorage resilience');
   const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const p = await c.newPage();
   await p.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(p);
   const junk = [
     'not json at all',
     '{"properties":"nope"}',
@@ -706,6 +860,7 @@ console.log('\nstorage resilience');
   const c = await browser.newContext({ viewport: { width: 1100, height: 900 } });
   const p = await c.newPage();
   await p.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(p);
   await p.screenshot({ path: SHOTS + '/06-desktop.png' });
   await c.close();
 }

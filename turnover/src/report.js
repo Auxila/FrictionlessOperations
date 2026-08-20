@@ -14,85 +14,114 @@ import { DEFICIT, VERIFIED, computeStats, formatMoney, formatMoneyShort, getItem
  * preview runs in a same-origin iframe, which inherits this page's CSP — an
  * unhashed <style> there is silently refused and the PDF prints unstyled. */
 export const REPORT_STYLES = `
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; }
-  body { margin:0; padding:24px; background:#f1f5f9; color:#0f172a;
-         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  .sheet { max-width:820px; margin:0 auto; background:#fff; border:1px solid #cbd5e1;
+  /* Every rule is scoped under .fo-report so the report can be rendered inside
+     the console's own document. That matters: printing a scrollable iframe only
+     ever prints its visible slice, so the report has to live in the top
+     document for "Save as PDF" to produce all of it. */
+  .fo-report { color-scheme: light; margin:0; padding:24px; background:#f1f5f9; color:#0f172a;
+       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .fo-report * { box-sizing: border-box; }
+  .fo-report .sheet { max-width:820px; margin:0 auto; background:#fff; border:1px solid #cbd5e1;
            border-radius:10px; padding:32px; }
-  h1 { margin:0 0 4px; font-size:22px; letter-spacing:-0.01em; }
-  .sub { margin:0 0 24px; color:#64748b; font-size:13px;
+  .fo-report h1 { margin:0 0 4px; font-size:22px; letter-spacing:-0.01em; }
+  .fo-report .sub { margin:0 0 24px; color:#64748b; font-size:13px;
          font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
          text-transform:uppercase; letter-spacing:.09em; }
-  .verdict { border:2px solid; border-radius:10px; padding:16px 18px; margin-bottom:22px; }
-  .v-label { margin:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.16em;
+  .fo-report .verdict { border:2px solid; border-radius:10px; padding:16px 18px; margin-bottom:22px; }
+  .fo-report .v-label { margin:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.16em;
              font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  .v-headline { margin:4px 0 0; font-size:24px; font-weight:700; letter-spacing:-0.01em; color:#0f172a; }
-  .v-detail { margin:4px 0 0; font-size:13px; color:#475569; }
-  .v-ready { border-color:#86efac; background:#f0fdf4; }
-  .v-ready .v-label { color:#15803d; }
-  .v-issues { border-color:#fca5a5; background:#fef2f2; }
-  .v-issues .v-label { color:#b91c1c; }
-  .v-incomplete { border-color:#fcd34d; background:#fffbeb; }
-  .v-incomplete .v-label { color:#b45309; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:28px; }
-  .card { border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; background:#f8fafc; }
-  .card b { display:block; font-size:22px; line-height:1.1; }
-  .card span { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#64748b;
+  .fo-report .v-headline { margin:4px 0 0; font-size:24px; font-weight:700; letter-spacing:-0.01em; color:#0f172a; }
+  .fo-report .v-detail { margin:4px 0 0; font-size:13px; color:#475569; }
+  .fo-report .v-ready { border-color:#86efac; background:#f0fdf4; }
+  .fo-report .v-ready .v-label { color:#15803d; }
+  .fo-report .v-issues { border-color:#fca5a5; background:#fef2f2; }
+  .fo-report .v-issues .v-label { color:#b91c1c; }
+  .fo-report .v-incomplete { border-color:#fcd34d; background:#fffbeb; }
+  .fo-report .v-incomplete .v-label { color:#b45309; }
+  .fo-report .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:28px; }
+  .fo-report .card { border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; background:#f8fafc; }
+  .fo-report .card b { display:block; font-size:22px; line-height:1.1; }
+  .fo-report .card span { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#64748b;
                font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  .card.claim b { color:#b91c1c; }
-  .card.ok b { color:#15803d; }
-  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.14em; color:#475569;
+  .fo-report .card.claim b { color:#b91c1c; }
+  .fo-report .card.ok b { color:#15803d; }
+  .fo-report h2 { font-size:12px; text-transform:uppercase; letter-spacing:.14em; color:#475569;
        border-bottom:1px solid #e2e8f0; padding-bottom:7px; margin:32px 0 16px; }
-  .finding { border:1px solid #fecaca; background:#fef2f2; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
-  .finding header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
-  .finding h3 { margin:0; font-size:16px; }
-  .sector { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#9f1239;
+  .fo-report .finding { border:1px solid #fecaca; background:#fef2f2; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+  .fo-report .finding header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .fo-report .finding h3 { margin:0; font-size:16px; }
+  .fo-report .sector { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#9f1239;
             font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:nowrap; }
-  .note { margin:8px 0 0; }
-  .note.muted { color:#94a3b8; font-style:italic; }
-  .meta, .stamp { margin:8px 0 0; font-size:12px; color:#64748b;
+  .fo-report .note { margin:8px 0 0; }
+  .fo-report .note.muted { color:#94a3b8; font-style:italic; }
+  .fo-report .meta, .fo-report .stamp { margin:8px 0 0; font-size:12px; color:#64748b;
                   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  .stamp { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
-  .shortfall { margin:8px 0 0; font-weight:700; color:#b91c1c; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  .sector-head th { text-align:left; padding:11px 8px 5px; font-size:10px; text-transform:uppercase;
+  .fo-report .stamp { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; }
+  .fo-report .shortfall { margin:8px 0 0; font-weight:700; color:#b91c1c; }
+  .fo-report table { width:100%; border-collapse:collapse; font-size:13px; }
+  .fo-report .sector-head th { text-align:left; padding:11px 8px 5px; font-size:10px; text-transform:uppercase;
                     letter-spacing:.12em; color:#0f172a; border-bottom:2px solid #cbd5e1; }
-  .sector-head span { color:#94a3b8; margin-left:6px; }
-  td { padding:4px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; line-height:1.35; }
-  td.status { width:112px; white-space:nowrap; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+  .fo-report .sector-head span { color:#94a3b8; margin-left:6px; }
+  .fo-report td { padding:4px 8px; border-bottom:1px solid #f1f5f9; vertical-align:top; line-height:1.35; }
+  .fo-report td.status { width:112px; white-space:nowrap; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
               font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  td.detail { color:#64748b; font-size:12px; }
-  .col-head th { text-align:left; padding:4px 8px; font-size:9px; text-transform:uppercase;
+  .fo-report td.detail { color:#64748b; font-size:12px; }
+  .fo-report .col-head th { text-align:left; padding:4px 8px; font-size:9px; text-transform:uppercase;
                  letter-spacing:.12em; color:#94a3b8; border-bottom:1px solid #e2e8f0; }
-  tr.s-verified td.status { color:#15803d; }
-  tr.s-deficit td.status { color:#b91c1c; font-weight:700; }
-  tr.s-pending td.status { color:#94a3b8; }
-  .estnote { margin:18px 0 0; padding:10px 12px; border-left:3px solid #e2e8f0; background:#f8fafc;
+  .fo-report tr.s-verified td.status { color:#15803d; }
+  .fo-report tr.s-deficit td.status { color:#b91c1c; font-weight:700; }
+  .fo-report tr.s-pending td.status { color:#94a3b8; }
+  .fo-report .estnote { margin:18px 0 0; padding:10px 12px; border-left:3px solid #e2e8f0; background:#f8fafc;
              font-size:11px; line-height:1.5; color:#64748b; }
-  .signoff { margin-top:32px; padding-top:16px; border-top:1px solid #e2e8f0;
+  .fo-report .signoff { margin-top:32px; padding-top:16px; border-top:1px solid #e2e8f0;
              display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
              font-size:12px; color:#475569; }
-  .signoff b { display:block; color:#0f172a; font-size:14px; }
-  footer { margin-top:20px; font-size:10px; color:#94a3b8; text-align:center;
+  .fo-report .signoff b { display:block; color:#0f172a; font-size:14px; }
+  .fo-report footer { margin-top:20px; font-size:10px; color:#94a3b8; text-align:center;
            font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
            text-transform:uppercase; letter-spacing:.1em; }
+
+  /* On a phone the report is read on screen before it is ever printed, and
+     24px + 32px of nested padding leaves barely 200px of content on a 320px
+     device. Reclaim it — print overrides all of this below anyway. */
+  @media screen and (max-width: 480px) {
+    .fo-report { padding:10px; }
+    .fo-report .sheet { padding:18px 16px; border-radius:8px; }
+    .fo-report h1 { font-size:20px; }
+    .fo-report .sub { margin-bottom:18px; font-size:12px; }
+    .fo-report .verdict { padding:13px 14px; margin-bottom:18px; }
+    .fo-report .v-headline { font-size:20px; }
+    .fo-report .cards { grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:22px; }
+    .fo-report .card { padding:10px 11px; }
+    .fo-report .card b { font-size:18px; }
+    .fo-report h2 { margin:24px 0 12px; }
+    .fo-report .finding { padding:12px 13px; }
+    .fo-report td, .fo-report .col-head th, .fo-report .sector-head th { padding-left:0; padding-right:6px; }
+    .fo-report td.status { width:84px; font-size:10px; }
+    .fo-report td.detail { font-size:11px; }
+    .fo-report .signoff { gap:10px; }
+  }
+
   @page { margin: 14mm 12mm; }
   @media print {
-    body { background:#fff; padding:0; font-size:11pt; }
-    .sheet { border:0; border-radius:0; padding:0; max-width:none; }
+    /* Print isolation: the console itself disappears and only the report host
+       — a portal straight onto <body> — is laid out. */
+    body > #root { display: none !important; }
+    body > .fo-report-host { display: block !important; position: static !important;
+                             overflow: visible !important; height: auto !important; }
+    .fo-report-chrome { display: none !important; }
+    .fo-report { padding:0 !important; background:#fff !important; font-size:11pt; }
+    .fo-report .sheet { border:0 !important; border-radius:0 !important; padding:0 !important; max-width:none !important; }
     /* Status colours and the red finding panels carry meaning, so keep the
        browser from helpfully stripping them out of the PDF. */
-    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .finding, .card { break-inside:avoid; }
-    h2 { break-after:avoid; }
-    tbody { break-inside:auto; }
-    tr { break-inside:avoid; }
-    .sector-head th { break-after:avoid; }
-    /* Repeat the column meanings at the top of every printed page. */
-    thead { display:table-header-group; }
-    .signoff { break-inside:avoid; }
-    .screen-only { display:none !important; }
+    .fo-report * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .fo-report .finding, .fo-report .card { break-inside:avoid; }
+    .fo-report h2 { break-after:avoid; }
+    .fo-report tbody { break-inside:auto; }
+    .fo-report tr { break-inside:avoid; }
+    .fo-report .sector-head th { break-after:avoid; }
+    .fo-report thead { display:table-header-group; }
+    .fo-report .signoff { break-inside:avoid; }
   }
 `;
 
@@ -188,7 +217,7 @@ export function reportTitle(property, at = new Date()) {
   })}`;
 }
 
-export function buildReport(property, report, options = {}) {
+export function buildReportBody(property, report, options = {}) {
   const stats = computeStats(property);
   const v = verdict(property);
   const generatedAt = options.generatedAt || new Date();
@@ -256,12 +285,7 @@ export function buildReport(property, report, options = {}) {
   const tableHead =
     '<thead><tr class="col-head"><th>Asset</th><th>Status</th><th>Detail</th></tr></thead>';
 
-  return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(reportTitle(property, generatedAt))}</title>
-<style>${REPORT_STYLES}</style></head>
-<body><div class="sheet">
+  return `<div class="fo-report"><div class="sheet">
   <h1>${esc(property.name)}</h1>
   <p class="sub">Turnover inventory report &middot; generated ${esc(generatedAt.toLocaleString(undefined, HUMAN))}</p>
 
@@ -302,5 +326,5 @@ export function buildReport(property, report, options = {}) {
   </div>
 
   <footer>Frictionless Operations &middot; Property Turnover Matrix</footer>
-</div></body></html>`;
+</div></div>`;
 }

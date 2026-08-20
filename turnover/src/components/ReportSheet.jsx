@@ -141,11 +141,10 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           <button
             type="button"
             onClick={() => signAndExport(onPrintPDF)}
-            disabled={exporting}
             className={`${btn.ghost} flex flex-1 items-center justify-center gap-2`}
           >
             <FileDown size={16} aria-hidden="true" />
-            {exporting ? 'Preparing…' : 'PDF'}
+            PDF
           </button>
           <button
             type="button"
@@ -157,7 +156,7 @@ export function ReportSheet({ property, auditor, onClose, onSignOff, onExportCSV
           </button>
         </div>
         <p className="text-center text-[11px] leading-relaxed text-slate-500">
-          PDF for the formal record · CSV for spreadsheets
+PDF opens a preview you print · CSV for spreadsheets
         </p>
       </div>
     </Modal>
