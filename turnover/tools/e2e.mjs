@@ -348,7 +348,8 @@ console.log('\npar levels + audit ergonomics');
      without a real one blocking the run. */
   await c.addInitScript(() => {
     window.__printed = 0;
-    window.print = () => { window.__printed += 1; };
+    window.__printTitle = '';
+    window.print = () => { window.__printed += 1; window.__printTitle = document.title; };
     /* Headless has no share sheet; stand one in so the payload is assertable. */
     window.__shared = null;
     navigator.share = async (data) => { window.__shared = data; };
@@ -531,38 +532,52 @@ console.log('\npar levels + audit ergonomics');
   await pg.fill('#signoff-name', 'J. Rivera');
   await pg.screenshot({ path: SHOTS + '/13-findings.png' });
 
-  /* The report prints from a same-origin iframe, which INHERITS this page's
-     CSP. Assert it is actually styled, not merely present — an unhashed
-     stylesheet is refused silently and the PDF comes out as naked text. */
+  /* The report is rendered in the console's own document and printed from the
+     top window. The previous hidden-iframe approach could report success while
+     doing nothing at all, so assert the operative can SEE the report — that is
+     the property that makes a silent no-op impossible. */
   await pg.getByRole('button', { name: /^PDF/ }).click();
-  await pg.waitForTimeout(1200);
-  const frame = pg.frames()[1];
-  check('print preview is created', Boolean(frame));
-  if (frame) {
-    check('preview titles itself for the Save-as-PDF filename',
-          /^Turnover Report - /.test(await frame.title()), await frame.title());
-    check('print() was reached', (await frame.evaluate(() => window.__printed)) === 1);
-    const body = await frame.evaluate(() => document.body.innerText);
-    check('report states the shortfall without anyone typing it',
-          body.includes('Short 7') && body.includes('counted 23 of 30'),
-          (/Short \d+ — counted \d+ of \d+/.exec(body) || ['not found'])[0]);
-    check('report carries the typed finding and the claim',
-          body.includes('Firebox rusted through') && body.includes('$240.00'));
-    check('report is signed', body.includes('J. Rivera'));
-    const styles = await frame.evaluate(() => ({
-      h1: getComputedStyle(document.querySelector('h1')).fontSize,
-      finding: getComputedStyle(document.querySelector('.finding')).backgroundColor,
-      sheet: getComputedStyle(document.querySelector('.sheet')).backgroundColor,
-    }));
-    check('report stylesheet survives the page CSP',
-          styles.h1 === '22px' && styles.finding === 'rgb(254, 242, 242)',
-          JSON.stringify(styles));
-    check('report references nothing external',
-          await frame.evaluate(() =>
-            !document.querySelector('script, link[rel=stylesheet], iframe, img')));
-  }
-  check('print reports success to the operative',
-        (await pg.locator('[role=status]').innerText()).includes('SAVE AS PDF'));
+  await pg.waitForTimeout(600);
+  const host = pg.locator('.fo-report-host');
+  check('PDF opens a visible report preview', (await host.count()) === 1);
+  check('the preview is on screen, not hidden', await host.isVisible());
+
+  const body = await host.innerText();
+  check('report states the shortfall without anyone typing it',
+        body.includes('Short 7') && body.includes('counted 23 of 30'),
+        (/Short \d+ — counted \d+ of \d+/.exec(body) || ['not found'])[0]);
+  check('report carries the typed finding and the claim',
+        body.includes('Firebox rusted through') && body.includes('$240.00'));
+  check('report is signed', body.includes('J. Rivera'));
+
+  /* The report CSS is scoped and folded into the app's own hashed stylesheet,
+     so a CSP refusal would show up as unstyled text. */
+  const styles = await pg.evaluate(() => ({
+    h1: getComputedStyle(document.querySelector('.fo-report h1')).fontSize,
+    finding: getComputedStyle(document.querySelector('.fo-report .finding')).backgroundColor,
+    sheet: getComputedStyle(document.querySelector('.fo-report .sheet')).backgroundColor,
+  }));
+  check('report stylesheet applies under the page CSP',
+        styles.h1 === '22px' && styles.finding === 'rgb(254, 242, 242)',
+        JSON.stringify(styles));
+  check('report styling does not leak into the console',
+        await pg.evaluate(() => getComputedStyle(document.body).backgroundColor !== 'rgb(241, 245, 249)'));
+
+  await pg.getByRole('button', { name: /Save as PDF/ }).click();
+  await pg.waitForTimeout(300);
+  check('printing goes through the top window', (await pg.evaluate(() => window.__printed)) === 1);
+  check('the PDF filename is seeded from a document title',
+        (await pg.evaluate(() => window.__printTitle || '')).startsWith('Turnover Report - '),
+        await pg.evaluate(() => window.__printTitle || '(none)'));
+
+  await pg.getByLabel('Close report').click();
+  await pg.waitForTimeout(250);
+  check('closing the preview returns to the console',
+        (await pg.locator('.fo-report-host').count()) === 0 &&
+        (await pg.locator('li[id^=row-]').count()) > 0);
+
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(250);
 
   /* --- CSV carries the count columns --- */
   const csvDl = await Promise.all([
@@ -577,7 +592,9 @@ console.log('\npar levels + audit ergonomics');
     check('CSV reports the shortfall', hangers.includes('"30","23","7"'), hangers?.slice(40, 90));
   }
 
-  /* --- backup round trip (no photo store any more) --- */
+  /* --- backup round trip --- */
+  await pg.getByLabel('Close').click();
+  await pg.waitForTimeout(200);
   await pg.getByLabel('Backup and restore').click();
   await pg.waitForTimeout(200);
   const bk = await Promise.all([
@@ -649,12 +666,14 @@ console.log('\nshare fallback (desktop / insecure context)');
   await pg.getByRole('button', { name: /^Findings/ }).click();
   await pg.getByRole('button', { name: 'Send update' }).click();
   await pg.waitForTimeout(400);
-  const toast = await pg.locator('[role=status]').innerText().catch(() => '');
-  check('falls back to the clipboard without a share sheet',
-        /COPIED/.test(toast), toast.slice(0, 60));
+  check('without a share sheet the summary is shown, not swallowed',
+        (await pg.getByText(/can’t open the share sheet/).count()) === 1);
   const clip = await pg.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  check('the copied text is the summary itself',
+  check('it is still copied to the clipboard as well',
         clip.includes('Toaster') && clip.includes('Element dead'), clip.slice(0, 40));
+  const panel = await pg.locator('textarea[aria-label="Summary text to copy"]').inputValue();
+  check('the panel shows the same summary',
+        panel === clip || panel.includes('Element dead'), panel.split('\n')[0]);
   await c.close();
 }
 
@@ -700,6 +719,49 @@ if (PASSCODE.hash) {
   await pg.reload({ waitUntil: 'networkidle' });
   await pg.waitForTimeout(400);
   check('it stays locked across a reload', (await pg.locator('#passcode').count()) === 1);
+  await c.close();
+}
+
+/* ══ 1e. Failures must be visible ══════════════════════════════════════
+ * Both reported bugs were silent: the PDF path announced "print dialog opened"
+ * on platforms where the call did nothing, and Send update fell back to the
+ * clipboard with only a transient toast to show for it. */
+console.log('\nno silent failures');
+{
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  /* A browser with no share sheet and a print() that does nothing — the exact
+     shape of the environment where both features appeared to "fail". */
+  await c.addInitScript(() => {
+    delete navigator.share;
+    window.print = () => {};
+  });
+  const pg = await c.newPage();
+  await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(pg);
+  await pg.getByLabel('Flag deficit on Grill').click();
+  await pg.fill('#p-grill-note', 'Firebox rusted through');
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(250);
+
+  await pg.getByRole('button', { name: /^PDF/ }).click();
+  await pg.waitForTimeout(600);
+  check('with an inert print(), the report is still shown',
+        (await pg.locator('.fo-report-host').isVisible()) &&
+        (await pg.locator('.fo-report .verdict').count()) === 1);
+  check('the preview explains what to do next',
+        (await pg.locator('.fo-report-host').innerText()).includes('Save as PDF'));
+  await pg.getByLabel('Close report').click();
+
+  await pg.getByRole('button', { name: /^Findings/ }).click();
+  await pg.waitForTimeout(250);
+  await pg.getByRole('button', { name: 'Send update' }).click();
+  await pg.waitForTimeout(700);
+  check('with no share sheet, the summary is shown rather than swallowed',
+        (await pg.getByText(/can’t open the share sheet/).count()) === 1);
+  const shown = await pg.locator('textarea[aria-label="Summary text to copy"]').inputValue();
+  check('the shown summary is the real one',
+        shown.includes('Firebox rusted through') && shown.startsWith('Unit 01'),
+        shown.split('\n')[0]);
   await c.close();
 }
 

@@ -24,7 +24,7 @@ with the service worker, the console boots and runs with the network fully down.
 | `tools/verify-checklist.mjs` | Asserts the checklist still matches the source document |
 | `src/store.js` | Persistence, counts, derived metrics, CSV, backup format |
 | `src/report.js` | The printable report (its stylesheet is CSP-hashed by the build) |
-| `src/print.js` | Renders the report into an off-screen iframe and prints it |
+| `src/components/ReportPreview.jsx` | Full-screen report preview; prints from the top window |
 | `src/share.js` | Native share sheet, with clipboard fallbacks beneath it |
 | `src/passcode.js` | The passcode gate — read its header before trusting it |
 | `src/sha256.js` | SHA-256 (FIPS 180-4), verified against NIST vectors in the suite |
@@ -198,17 +198,33 @@ the wrong one for a manager's inbox.
 ### How printing works
 
 No PDF library is bundled — one would cost ~400 KB and produce worse typography
-than the platform gives away free. `src/print.js` renders the report into an
-off-screen, same-origin iframe and calls the browser's own print engine. Every
-target can save that to PDF: Windows ships “Microsoft Print to PDF”, macOS and
-iOS have PDF in the print sheet, Android Chrome has “Save as PDF”.
+than the platform gives away free. **PDF opens a full-screen preview of the
+report inside the console**, and the Save as PDF button prints the top window.
+Every target can save that to PDF: Windows ships “Microsoft Print to PDF”,
+macOS and iOS have PDF in the print sheet, Android Chrome has “Save as PDF”.
 
-The iframe is off-screen rather than `display:none`, because an unlaid-out
-document prints blank. It uses `srcdoc`, which **inherits this page's CSP** —
-so the build hashes the report's stylesheet into `style-src` alongside the app's
-own. Without that hash the stylesheet is refused silently and the PDF comes out
-as unstyled text while the app still reports success; there is a test asserting
-the preview's computed styles, not merely its content.
+Showing the report first is the point, not a flourish. An earlier build sent it
+to a hidden iframe and called `print()` there, which **fails silently** where a
+browser treats that call as a no-op — the app announced “print dialog opened”
+and nothing happened. Printing a scrollable iframe is also only ever guaranteed
+to emit its visible slice. With the report on screen, the operative always has
+something real in front of them: if the button does nothing on their platform,
+the page is right there for the browser's own Share → Print.
+
+The report stylesheet is scoped under `.fo-report` and appended to the app's
+compiled CSS, so it is covered by the same `style-src` hash — one stylesheet,
+one hash, nothing injected at runtime for CSP to refuse. The preview is
+portalled straight onto `<body>` so `@media print` can hide `#root` and lay out
+only the report. A test asserts the preview's *computed styles*, not merely its
+content, because a CSP refusal shows up as unstyled text rather than an error.
+
+### When there is no share sheet
+
+`navigator.share` needs HTTPS, so opening the console from a local file or a
+plain `http://` LAN address has no share sheet at all. Rather than copying to
+the clipboard behind a toast that is easy to miss and explains nothing, **the
+summary is shown in a panel** with the reason and a Copy button. A feature that
+cannot work should say so, not appear to have done nothing.
 
 ## Working through 69 assets
 

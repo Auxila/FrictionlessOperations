@@ -19,12 +19,12 @@ import {
   downloadCSVAll, downloadText, getItem, isBlank, loadState, makeProperty, parseBackup,
   probeStorage, saveState, statusFromCount, suggestedCost, verdict,
 } from './store.js';
-import { buildReport, buildSummaryText, summarySubject } from './report.js';
-import { printDocument } from './print.js';
+import { buildReportBody, buildSummaryText, reportTitle, summarySubject } from './report.js';
 import { shareText } from './share.js';
 import { isEnabled as passcodeEnabled, isUnlocked, lock } from './passcode.js';
 import { ConfirmPhrase, Modal, btn, input } from './ui.jsx';
 import { LockScreen } from './components/LockScreen.jsx';
+import { ReportPreview } from './components/ReportPreview.jsx';
 import { Sector } from './components/Sector.jsx';
 import { CopyCountsSheet } from './components/CopyCountsSheet.jsx';
 import { PropertySheet } from './components/PropertySheet.jsx';
@@ -51,6 +51,7 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState({});
   const [exporting, setExporting] = useState(false);
+  const [preview, setPreview] = useState(null); // { html, title }
   const scrollRef = useRef(null);
   const toastTimer = useRef(0);
   /* Holds the previous state plus any blob cleanup a destructive action
@@ -312,32 +313,26 @@ function App() {
 
   const share = async (signedBy) => {
     const target = signedProperty(signedBy);
-    const result = await shareText({
-      title: summarySubject(target),
-      text: buildSummaryText(target, report),
-    });
+    const text = buildSummaryText(target, report);
+    const result = await shareText({ title: summarySubject(target), text });
     if (result === 'cancelled') return;
-    setModal(null);
-    flash(
-      result === 'shared'
-        ? 'Update sent'
-        : result === 'copied'
-          ? 'Summary copied — paste it into a message'
-          : 'Could not share on this device'
-    );
+    if (result === 'shared') {
+      setModal(null);
+      flash('Update sent');
+      return;
+    }
+    /* No share sheet here — the API needs HTTPS, so a local file or a plain
+     * http address falls through. A toast saying "copied" is easy to miss and
+     * explains nothing, so show the summary itself with the reason. */
+    setModal({ type: 'summary', text, copied: result === 'copied' });
   };
 
-  const printPDF = async (signedBy) => {
-    setExporting(true);
-    try {
-      await printDocument(buildReport(signedProperty(signedBy), report));
-      setModal(null);
-      flash('Print dialog opened — choose “Save as PDF”');
-    } catch {
-      flash('Could not open the print dialog');
-    } finally {
-      setExporting(false);
-    }
+  /* Show the report rather than firing a print dialog blind. See the note at
+   * the top of ReportPreview for why. */
+  const openPreview = (signedBy) => {
+    const target = signedProperty(signedBy);
+    setPreview({ html: buildReportBody(target, report), title: reportTitle(target) });
+    setModal(null);
   };
 
   const exportBackup = () => {
@@ -686,6 +681,10 @@ function App() {
         />
       )}
 
+      {preview && (
+        <ReportPreview html={preview.html} title={preview.title} onClose={() => setPreview(null)} />
+      )}
+
       {modal?.type === 'copy-counts' && (() => {
         const source = state.properties.find((p) => p.id === modal.id);
         return source ? (
@@ -698,6 +697,40 @@ function App() {
         ) : null;
       })()}
 
+      {modal?.type === 'summary' && (
+        <Modal title="Send update" subtitle={property.name} onClose={() => setModal(null)}>
+          <p className="mb-3 text-sm leading-relaxed text-slate-400">
+            {modal.copied ? 'Copied to your clipboard. ' : ''}
+            This browser can’t open the share sheet — that needs the live{' '}
+            <span className="font-mono text-slate-300">https://</span> address, not a local file.
+            Paste this into a text or email.
+          </p>
+          <textarea
+            readOnly
+            rows={12}
+            value={modal.text}
+            onFocus={(e) => e.target.select()}
+            aria-label="Summary text to copy"
+            className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-[12px] leading-relaxed text-slate-200 focus:border-slate-400 focus:outline-none"
+          />
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => setModal(null)} className={btn.ghost}>
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = (await shareText({ title: summarySubject(property), text: modal.text })) !== 'failed';
+                flash(ok ? 'Summary copied' : 'Select the text above and copy it');
+              }}
+              className={btn.primary}
+            >
+              Copy again
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {modal?.type === 'report' && (
         <ReportSheet
           property={property}
@@ -706,7 +739,7 @@ function App() {
           onClose={() => setModal(null)}
           onSignOff={signOff}
           onExportCSV={exportCSV}
-          onPrintPDF={printPDF}
+          onPrintPDF={openPreview}
           onShare={share}
         />
       )}
