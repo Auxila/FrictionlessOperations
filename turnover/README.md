@@ -26,6 +26,8 @@ with the service worker, the console boots and runs with the network fully down.
 | `src/report.js` | The printable report (its stylesheet is CSP-hashed by the build) |
 | `src/print.js` | Renders the report into an off-screen iframe and prints it |
 | `src/share.js` | Native share sheet, with clipboard fallbacks beneath it |
+| `src/passcode.js` | The passcode gate — read its header before trusting it |
+| `src/sha256.js` | SHA-256 (FIPS 180-4), verified against NIST vectors in the suite |
 | `src/app.jsx` | App shell, state, exports |
 | `src/ui.jsx` | Modal / button / field primitives |
 | `src/components/` | AssetRow, Sector, and the four sheets |
@@ -221,6 +223,62 @@ the preview's computed styles, not merely its content.
 - **Collapse** — tap a sector header to fold a room away.
 - **Undo** — bulk verify, checklist reset, property purge, count-copy and
   restore all leave a 7-second Undo in the toast.
+
+## The passcode gate — what it is and is not
+
+The console asks for a passcode before it opens. **Be clear about what that
+buys**, because it is easy to mistake for security it does not provide.
+
+**This is a door, not a safe.** The console is a static page on a public host.
+Every byte of it — this check included — is downloaded by anyone who asks for
+the URL. A determined person can read the source, step past the gate in
+devtools, or fetch the raw file. Nothing that runs in a browser can prevent
+that, and no amount of work on this gate will change it.
+
+What it genuinely does:
+
+- stops someone who stumbles onto the URL from wandering into a working tool
+- lets an operative lock the screen before handing their phone to anybody
+
+What it does **not** do:
+
+- **protect audit data already on the device.** That lives in localStorage in
+  the clear. Anyone holding the unlocked phone with devtools open can read it.
+- keep out anyone motivated. Treat it as a "staff only" sign on an unlocked
+  door.
+
+The passcode is stored salted and stretched (20,000 SHA-256 iterations, ~250 ms
+per attempt) rather than in plain sight, so it is not sitting in view-source and
+a stock rainbow table does not resolve it. That raises the cost of guessing; it
+does not make guessing impossible, and a short dictionary word is the limiting
+factor regardless of the iteration count.
+
+```bash
+npm run set-passcode -- "some longer phrase"   # then: npm run build
+npm run set-passcode -- ""                     # removes the gate entirely
+```
+
+The plaintext is never written to the repository — only the salt and the hash.
+
+**If you need actual protection, the gate has to live in front of the server**:
+Cloudflare Access, a host with built-in password protection, or simply not
+publishing the console at a public URL.
+
+### What is actually exposed
+
+Worth stating plainly, because it is smaller than it looks:
+
+- **The app makes zero network calls.** `connect-src 'self'`, no fetch, no
+  beacons, no analytics. Serial numbers and audit data never leave the device
+  they were typed on unless somebody exports them deliberately.
+- **There is no shared database.** Every browser holds its own audits. A
+  stranger who opens the URL and guesses the passcode gets an empty checklist —
+  not yours.
+- **Nobody can alter the app** without push access to the GitHub repository.
+
+So the realistic threat is not someone on the internet. It is someone picking up
+an unlocked phone that has the console installed — which is what the Lock button
+is for, and why device-level screen lock matters more here than this gate does.
 
 ## Backup & restore
 

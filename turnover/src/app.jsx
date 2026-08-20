@@ -6,7 +6,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  ChevronDown, ClipboardList, Crosshair, Database, Download, Plus, RotateCcw, Search, Undo2, X,
+  ChevronDown, ClipboardList, Crosshair, Database, Download, Lock, Plus, RotateCcw, Search,
+  Undo2, X,
 } from 'lucide-react';
 
 import { ALL_ITEMS, SECTORS } from './inventory.js';
@@ -21,7 +22,9 @@ import {
 import { buildReport, buildSummaryText, summarySubject } from './report.js';
 import { printDocument } from './print.js';
 import { shareText } from './share.js';
+import { isEnabled as passcodeEnabled, isUnlocked, lock } from './passcode.js';
 import { ConfirmPhrase, Modal, btn, input } from './ui.jsx';
+import { LockScreen } from './components/LockScreen.jsx';
 import { Sector } from './components/Sector.jsx';
 import { CopyCountsSheet } from './components/CopyCountsSheet.jsx';
 import { PropertySheet } from './components/PropertySheet.jsx';
@@ -42,6 +45,7 @@ function App() {
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState(null); // { message, undo? }
   const [storageOK] = useState(probeStorage);
+  const [unlocked, setUnlocked] = useState(isUnlocked);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -391,6 +395,8 @@ function App() {
     [state.properties]
   );
 
+  if (!unlocked) return <LockScreen onUnlock={() => setUnlocked(true)} />;
+
   /* Mobile-first, but capped so the console reads as a device panel on a
    * tablet or desktop instead of a 2000px-wide row of stranded checkboxes. */
   return (
@@ -416,6 +422,19 @@ function App() {
               {v.label}
             </span>
           </span>
+          {passcodeEnabled() && (
+            <button
+              type="button"
+              onClick={() => {
+                lock();
+                setUnlocked(false);
+              }}
+              aria-label="Lock the console"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-800 text-slate-500 transition-colors hover:border-slate-600 hover:text-slate-200"
+            >
+              <Lock size={15} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         {/* Multi-node selector. The roster behind it carries progress, deficit

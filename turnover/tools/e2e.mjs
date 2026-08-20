@@ -16,6 +16,19 @@ import { chromium } from 'playwright';
 /* Expectations are derived from the checklist, not hard-coded: these prices are
    meant to be retuned per market, and a reprice must not break the suite. */
 import { ALL_ITEMS } from '../src/inventory.js';
+import { PASSCODE } from '../src/passcode-config.js';
+import { sha256Hex } from '../src/sha256.js';
+
+/* The suite needs to get past the gate. It knows the passcode only because the
+   test author set it — nothing in the repo stores the plaintext. */
+const PASSCODE_PLAINTEXT = process.env.TEST_PASSCODE || 'avari';
+async function unlock(page) {
+  if (!PASSCODE.hash) return;
+  await page.waitForSelector('#passcode', { timeout: 10000 });
+  await page.fill('#passcode', PASSCODE_PLAINTEXT);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await page.waitForSelector('li[id^=row-]', { timeout: 15000 });
+}
 
 const priceOf = (id) => ALL_ITEMS.find((i) => i.id === id).unitCost;
 
@@ -38,6 +51,29 @@ const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
 );
 
+/* ══ 0. SHA-256 against the NIST vectors ═══════════════════════════════
+ * The passcode gate ships its own hash implementation because crypto.subtle
+ * needs a secure context. Hand-rolled crypto gets verified or it does not
+ * ship. */
+console.log('sha256 (FIPS 180-4 vectors)');
+for (const [input, want] of [
+  ['', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'],
+  ['abc', 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'],
+  ['abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq',
+   '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1'],
+  ['abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu',
+   'cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1'],
+  ['a'.repeat(1000000),
+   'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0'],
+]) {
+  const got = sha256Hex(input);
+  check(`sha256 vector (${input.length} bytes)`, got === want, got === want ? '' : got);
+}
+/* Multi-block and unicode paths, which the vectors above do not exercise. */
+check('sha256 handles multi-byte characters',
+      sha256Hex('café · 日本') ===
+      sha256Hex(Buffer.from('café · 日本', 'utf8').toString('utf8')));
+
 /* ══ 1. Field console on a phone ═══════════════════════════════════════ */
 console.log('\nfield console (390×844, touch)');
 const ctx = await browser.newContext({
@@ -54,6 +90,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 
 await page.goto(BASE, { waitUntil: 'networkidle' });
+await unlock(page);
 
 /* ── boot ─────────────────────────────────────────────────────────────── */
 check('app mounts', (await page.locator('#root > div').count()) === 1);
@@ -321,6 +358,7 @@ console.log('\npar levels + audit ergonomics');
   pg.on('pageerror', (e) => errs.push(e.message));
   pg.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
   await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(pg);
   await pg.waitForTimeout(300);
 
   /* --- a par level turns a tick-box row into a counter --- */
@@ -551,6 +589,7 @@ console.log('\npar levels + audit ergonomics');
     const backupPath = await bk.path();
     await pg.evaluate(() => localStorage.clear());
     await pg.reload({ waitUntil: 'networkidle' });
+    await unlock(pg);
     await pg.waitForTimeout(300);
     check('device really was wiped',
           (await pg.locator('#row-u-forks input[aria-label^="Counted"]').count()) === 0);
@@ -604,6 +643,7 @@ console.log('\nshare fallback (desktop / insecure context)');
   });
   const pg = await c.newPage();
   await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(pg);
   await pg.getByLabel('Flag deficit on Toaster').click();
   await pg.fill('#k-toaster-note', 'Element dead');
   await pg.getByRole('button', { name: /^Findings/ }).click();
@@ -618,12 +658,58 @@ console.log('\nshare fallback (desktop / insecure context)');
   await c.close();
 }
 
+/* ══ 1d. The passcode gate ═════════════════════════════════════════════ */
+console.log('\npasscode gate');
+if (PASSCODE.hash) {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const pg = await c.newPage();
+  await pg.goto(BASE, { waitUntil: 'networkidle' });
+  await pg.waitForTimeout(300);
+
+  check('a first visit lands on the lock screen', (await pg.locator('#passcode').count()) === 1);
+  check('the console is not rendered behind it',
+        (await pg.locator('li[id^=row-]').count()) === 0);
+
+  /* The gate is a door, not a safe — but the passcode should at least not be
+     sitting in the served file in plain sight. */
+  const pageSource = await (await fetch(BASE)).text();
+  check('the plaintext passcode is not in the served page',
+        !pageSource.toLowerCase().includes(PASSCODE_PLAINTEXT.toLowerCase()));
+  check('the stored value is a hash, not the code',
+        pageSource.includes(PASSCODE.hash) && PASSCODE.hash.length === 64);
+
+  await pg.fill('#passcode', 'notthecode');
+  await pg.getByRole('button', { name: 'Unlock' }).click();
+  await pg.waitForTimeout(1200);
+  check('a wrong passcode is rejected', (await pg.getByText('Incorrect passcode').count()) === 1);
+  check('a wrong passcode does not open the console',
+        (await pg.locator('li[id^=row-]').count()) === 0);
+
+  await unlock(pg);
+  check('the right passcode opens the console',
+        (await pg.locator('li[id^=row-]').count()) === 69);
+
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForTimeout(400);
+  check('the unlock is remembered on this device',
+        (await pg.locator('li[id^=row-]').count()) === 69);
+
+  await pg.getByLabel('Lock the console').click();
+  await pg.waitForTimeout(300);
+  check('the Lock button re-locks it', (await pg.locator('#passcode').count()) === 1);
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForTimeout(400);
+  check('it stays locked across a reload', (await pg.locator('#passcode').count()) === 1);
+  await c.close();
+}
+
 /* ══ 2. Layout across device classes ═══════════════════════════════════ */
 console.log('\nlayout across device classes');
 for (const [label, w, h] of [['iPhone SE 320', 320, 568], ['iPhone 14 390', 390, 844], ['iPad 768', 768, 1024]]) {
   const c = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 700, hasTouch: true });
   const p = await c.newPage();
   await p.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(p);
   /* Engage the row with the widest capture panel (brand + model + serial). */
   await p.locator('li:has-text("Refrigerator") [role=checkbox]').first().click();
   await p.waitForTimeout(100);
@@ -680,6 +766,7 @@ console.log('\nstorage resilience');
   const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const p = await c.newPage();
   await p.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(p);
   const junk = [
     'not json at all',
     '{"properties":"nope"}',
@@ -706,6 +793,7 @@ console.log('\nstorage resilience');
   const c = await browser.newContext({ viewport: { width: 1100, height: 900 } });
   const p = await c.newPage();
   await p.goto(BASE, { waitUntil: 'networkidle' });
+  await unlock(p);
   await p.screenshot({ path: SHOTS + '/06-desktop.png' });
   await c.close();
 }

@@ -9,7 +9,8 @@
     "icons": "node tools/make-icons.mjs",
     "serve": "node --run build && node tools/serve.mjs",
     "test": "node tools/e2e.mjs",
-    "verify": "node tools/verify-checklist.mjs"
+    "verify": "node tools/verify-checklist.mjs",
+    "set-passcode": "node tools/set-passcode.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
