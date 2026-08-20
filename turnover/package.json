@@ -1,0 +1,23 @@
+{
+  "name": "turnover-matrix",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Property Turnover Matrix — offline field-audit console. Builds to a single self-contained index.html.",
+  "scripts": {
+    "build": "node build.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "serve": "node --run build && node tools/serve.mjs",
+    "test": "node tools/e2e.mjs",
+    "verify": "node tools/verify-checklist.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.33.0",
+    "playwright": "^1.62.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^3.4.19"
+  }
+}
