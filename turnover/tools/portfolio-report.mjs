@@ -116,6 +116,34 @@ const cards = rows.map(({ p, r, s, v }) => {
   </section>`;
 }).join('');
 
+/* Every appliance in the portfolio in one table. The detail cards above answer
+ * "what is in this property"; this answers "where is that serial number", which
+ * is the question someone actually has when a warranty form is open in front of
+ * them. One <tbody> per property so a unit's rows never split across a page. */
+const indexGroups = rows.map(({ p }) => {
+  const list = SPEC.map((it) => ({ it, st: getItem(p, it.id) }))
+    .filter(({ it, st }) => st.brand || st.model || st.serial || it.id.startsWith('k-'));
+  if (!list.length) return '';
+  const cell = (x) => x ? esc(x) : '<span class="absent">not located</span>';
+  return `<tbody>${list.map(({ it, st }, i) => `<tr>
+      <td class="prop">${i === 0 ? esc(p.name) : ''}</td>
+      <td class="asset">${esc(it.label)}</td>
+      <td>${cell(st.brand)}</td>
+      <td class="mono">${cell(st.model)}</td>
+      <td class="mono">${cell(st.serial)}</td>
+    </tr>`).join('')}</tbody>`;
+}).join('');
+const indexRowCount = rows.reduce((n, { p }) =>
+  n + SPEC.filter((it) => {
+    const st = getItem(p, it.id);
+    return st.brand || st.model || st.serial || it.id.startsWith('k-');
+  }).length, 0);
+const indexComplete = rows.reduce((n, { p }) =>
+  n + SPEC.filter((it) => {
+    const st = getItem(p, it.id);
+    return st.brand && st.model && st.serial;
+  }).length, 0);
+
 const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -208,6 +236,17 @@ const html = `<!DOCTYPE html>
   .missing .num{text-align:right;font-family:var(--mono);font-size:12px;white-space:nowrap}
   .missing .money{font-weight:700;color:var(--red)}
 
+  .indexnote{margin:0 0 12px;font-size:13px;color:var(--mid);line-height:1.6}
+  .applindex{font-size:12.5px}
+  .applindex thead th{padding:6px 9px;text-align:left;font:9px/1.4 var(--mono);
+                      text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
+                      border-bottom:1px solid var(--rule)}
+  .applindex td{padding:5px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  .applindex tbody{border-top:1px solid var(--line)}
+  .applindex tbody:first-of-type{border-top:0}
+  .applindex .prop{font-weight:700;width:158px;line-height:1.35}
+  .applindex .asset{width:104px;color:var(--mid)}
+
   footer{margin-top:38px;padding-top:14px;border-top:1px solid var(--line);
          font:9px/1.6 var(--mono);text-transform:uppercase;letter-spacing:.12em;
          color:var(--dim);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -218,6 +257,7 @@ const html = `<!DOCTYPE html>
     .sheet{border:0;border-radius:0;padding:0;max-width:none}
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .card,.fig,.callout{break-inside:avoid}
+    .applindex tbody{break-inside:avoid}
     h2{break-after:avoid}
     tr{break-inside:avoid}
     thead{display:table-header-group}
@@ -249,6 +289,12 @@ const html = `<!DOCTYPE html>
     .missing td{padding:5px 5px;font-size:12px}
     .missing .present{font-size:11px}
     .outstanding td{padding:5px 4px;font-size:12px}
+    /* Five columns will not fit a phone: the appliance index drops Brand,
+       which is the one value that is guessable from the model number. */
+    .applindex td:nth-child(3),.applindex thead th:nth-child(3){display:none}
+    .applindex td{padding:4px 4px;font-size:11px}
+    .applindex .prop{width:auto;overflow-wrap:anywhere}
+    .applindex .asset{width:auto}
   }
 </style></head>
 <body><div class="sheet">
@@ -292,6 +338,15 @@ const html = `<!DOCTYPE html>
 
   <h2 class="detail-start">Property detail</h2>
   ${cards}
+
+  <h2 class="detail-start">Appliance index</h2>
+  <p class="indexnote">All ${indexRowCount} appliances across ${properties.length} properties —
+  ${indexComplete} fully recorded, ${indexRowCount - indexComplete} with details still to capture.
+  For looking up a model or serial without hunting through the detail above.</p>
+  <table class="applindex">
+    <thead><tr><th>Property</th><th>Appliance</th><th>Brand</th><th>Model</th><th>Serial</th></tr></thead>
+    ${indexGroups}
+  </table>
 
   <footer>
     <span>Frictionless Operations &middot; Turnover Matrix</span>
