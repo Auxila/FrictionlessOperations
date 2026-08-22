@@ -100,7 +100,11 @@ export const SECTORS = [
     accent: '251 191 36',
     items: [
       { id: 'u-forks', label: 'Forks', qty: true, hint: 'How many?', unitCost: 3 },
-      { id: 'u-knives', label: 'Knives', qty: true, hint: 'How many?', unitCost: 3 },
+      /* The source document says just "Knives" here, sitting two lines above
+       * "Knife Set". Unqualified, a reader of the report cannot tell whether
+       * a shortfall of 43 means table knives or forty-three chef's knives —
+       * so the label states which. Same id, so existing audits are unaffected. */
+      { id: 'u-knives', label: 'Butter Knives', qty: true, hint: 'How many?', unitCost: 3 },
       { id: 'u-spoons', label: 'Spoons', qty: true, hint: 'How many?', unitCost: 3 },
       { id: 'u-serving', label: 'Serving Utensils', unitCost: 13 },
       { id: 'u-can-opener', label: 'Can Opener', unitCost: 16 },
