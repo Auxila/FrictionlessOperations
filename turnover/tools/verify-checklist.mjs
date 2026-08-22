@@ -58,12 +58,20 @@ const SOURCE = {
  * additions stay visible rather than drifting in unnoticed. */
 const SOURCE_SPEC_ASSETS = ['Refrigerator', 'Stove / Oven', 'Microwave', 'Dishwasher'];
 const SOURCE_QTY_ASSETS = [
-  'Pots', 'Pans', 'Forks', 'Knives', 'Spoons', 'Dining Chairs', 'Bar Stools',
+  'Pots', 'Pans', 'Forks', 'Butter Knives', 'Spoons', 'Dining Chairs', 'Bar Stools',
   'Hangers', 'Pillows',
 ];
 const SOURCE_CONDITION_ASSETS = [
   'Patio Table', 'Patio Chairs', 'Lounge Chairs', 'Outdoor Cushions', 'Grill',
 ];
+
+/* Deliberate clarifications: where the source document's wording is ambiguous
+ * in a report, the checklist says which thing is meant. The mapping is recorded
+ * here so the source line is still accounted for and the deviation stays
+ * visible rather than looking like drift. */
+const CLARIFIED = {
+  'butter knives': 'knives', // doc says "Knives"; "Knife Set" is the separate line
+};
 
 /* Strip the document's fill-in blanks and spacing quirks so "Stove/Oven" and
  * "Stove / Oven" compare equal, but a genuinely different asset does not. */
@@ -76,6 +84,8 @@ const norm = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const canon = (s) => CLARIFIED[norm(s)] || norm(s);
+
 let failures = 0;
 const fail = (msg) => { failures++; console.log('  MISSING/DRIFT  ' + msg); };
 
@@ -85,7 +95,7 @@ for (const [sectorId, sourceLabels] of Object.entries(SOURCE)) {
   const sector = bySector[sectorId];
   if (!sector) { fail(`sector "${sectorId}" no longer exists in inventory.js`); continue; }
 
-  const have = sector.items.map((i) => norm(i.label));
+  const have = sector.items.map((i) => canon(i.label));
   const want = sourceLabels.map(norm);
 
   for (const [i, label] of want.entries()) {
