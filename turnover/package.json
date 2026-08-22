@@ -10,7 +10,8 @@
     "serve": "node --run build && node tools/serve.mjs",
     "test": "node tools/e2e.mjs",
     "verify": "node tools/verify-checklist.mjs",
-    "set-passcode": "node tools/set-passcode.mjs"
+    "set-passcode": "node tools/set-passcode.mjs",
+    "report": "node tools/portfolio-report.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
