@@ -22,6 +22,7 @@ with the service worker, the console boots and runs with the network fully down.
 | `icon-*.png` | Icon set (generated from an inline SVG by `npm run icons`) |
 | `src/inventory.js` | The master checklist — 69 assets across 12 spatial sectors |
 | `tools/verify-checklist.mjs` | Asserts the checklist still matches the source document |
+| `tools/portfolio-report.mjs` | Compiles one printable report from a whole-portfolio backup |
 | `src/store.js` | Persistence, counts, derived metrics, CSV, backup format |
 | `src/report.js` | The printable report (its stylesheet is CSP-hashed by the build) |
 | `src/components/ReportPreview.jsx` | Full-screen report preview; prints from the top window |
@@ -42,6 +43,7 @@ npm run build     # -> index.html, sw.js, manifest.webmanifest
 npm run serve     # build, then preview on http://localhost:8080
 npm run icons     # regenerate the PNG icon set (only if the mark changes)
 npm run verify    # check the checklist against the source document
+npm run report -- backup.json out.html   # portfolio report from a backup
 npm test          # drive the built page through the browser suite
 ```
 
@@ -308,6 +310,21 @@ Worth stating plainly, because it is smaller than it looks:
 So the realistic threat is not someone on the internet. It is someone picking up
 an unlocked phone that has the console installed — which is what the Lock button
 is for, and why device-level screen lock matters more here than this gate does.
+
+## Portfolio report
+
+The console's own report covers one property. When several units have been
+audited and their backups merged, `npm run report -- <backup.json> <out.html>`
+compiles the lot into one printable document: headline figures, an at-a-glance
+index of every property with its status and cost, the consolidated restock
+order, any appliance records still outstanding, then a detail card per property
+carrying its brand/model/serial register and what is missing.
+
+Properties that were never walked — the placeholder the app provisions on first
+run, if it was never used — are omitted. A blank entry in a report invites the
+wrong question.
+
+Open the HTML and print it to PDF, the same way as the single-property report.
 
 ## Backup & restore
 
